@@ -38,6 +38,8 @@ Same outcome as the script: `npm install`, `npm link`, then symlink or stub-load
 opencode-figma connect
 ```
 
+Or use the **`figma_connect`** tool in OpenCode.
+
 Or ask OpenCode: "Connect to Figma"
 
 This will:
