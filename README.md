@@ -23,7 +23,6 @@ The package is not on npm yet. From a clone of this repo:
 2. **Open Project** and choose your cloned **opencode-figma** folder (the repo root with `package.json`).
 3. Open the **integrated Terminal**.
 4. Run **`npm install`**, then **`npm run setup`**.
-5. **Quit and reopen OpenCode** so the plugin loads.
 
 Full detail, troubleshooting, and uninstall: **[SETUP_GUIDE.md](./SETUP_GUIDE.md)**.
 
