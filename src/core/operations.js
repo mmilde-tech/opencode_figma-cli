@@ -341,7 +341,8 @@ export async function analyzeSpacing(client, args) {
 const LINT_RULES = {
   'color-contrast': true,
   'touch-target-size': true,
-  'no-default-names': true
+  'no-default-names': true,
+  'layout-grid': true
 };
 
 export async function lint(client, args) {
@@ -353,7 +354,10 @@ export async function lint(client, args) {
   return await client.run(`(async () => {
     const root = ctx.nodeId ? await figma.getNodeByIdAsync(ctx.nodeId) : figma.currentPage;
     if (!root) throw new Error('Node not found');
-    const enabled = (r) => !ctx.rule || ctx.rule === r;
+    const enabled = (r) => {
+      if (!ctx.rule) return r !== 'layout-grid';
+      return ctx.rule === r;
+    };
     const issues = [];
     const rel = (c) => {
       const ch = (v) => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -404,6 +408,27 @@ export async function lint(client, args) {
               msg: 'Contrast ' + r.toFixed(2) + ':1 < ' + min + ':1 (' + _oc.rgbToHex(fg) + ' on ' + _oc.rgbToHex(bg) + ')'
             });
           }
+        }
+      }
+      if (enabled('layout-grid') && n.type === 'FRAME' && 'layoutMode' in n && n.layoutMode && n.layoutMode !== 'NONE') {
+        const checkSpacing = (label, v) => {
+          if (typeof v !== 'number' || !Number.isFinite(v)) return;
+          const rounded = Math.round(v);
+          if (Math.abs(v - rounded) > 0.01) return;
+          if (rounded % 4 !== 0) {
+            issues.push({
+              rule: 'layout-grid',
+              node: _oc.summarize(n),
+              msg: label + ' ' + v + 'px is not a multiple of 4'
+            });
+          }
+        };
+        checkSpacing('itemSpacing', n.itemSpacing);
+        if ('paddingLeft' in n) {
+          checkSpacing('paddingLeft', n.paddingLeft);
+          checkSpacing('paddingRight', n.paddingRight);
+          checkSpacing('paddingTop', n.paddingTop);
+          checkSpacing('paddingBottom', n.paddingBottom);
         }
       }
       if ('children' in n) for (const c of n.children) walk(c);
@@ -1122,7 +1147,9 @@ const renderTree = async (tree, parent) => {
           k === 'flex' || k === 'gap' || k === 'p' || k === 'px' || k === 'py' ||
           k === 'pl' || k === 'pr' || k === 'pt' || k === 'pb' ||
           k === 'justify' || k === 'items' || k === 'opacity' ||
-          k === 'bg' || k === 'fill' || k === 'stroke' || k === 'strokeWidth' || k === 'rounded') continue;
+          k === 'bg' || k === 'fill' || k === 'stroke' || k === 'strokeWidth' || k === 'rounded' ||
+          k === 'wrap' || k === 'rowGap' || k === 'crossGap' ||
+          k === 'grow' || k === 'alignSelf' || k === 'minW' || k === 'minH' || k === 'maxW' || k === 'maxH') continue;
       overrides[k] = v;
     }
     const textChild = (children || []).find(c => typeof c === 'string');
@@ -1176,6 +1203,16 @@ const renderTree = async (tree, parent) => {
     if (props.justify && align[props.justify]) node.primaryAxisAlignItems = align[props.justify];
     if (props.items && align[props.items]) node.counterAxisAlignItems = align[props.items];
 
+    if (props.wrap === true || props.wrap === 'wrap' || props.wrap === 'true') {
+      if ('layoutWrap' in node) node.layoutWrap = 'WRAP';
+    } else if (props.wrap === false || props.wrap === 'nowrap' || props.wrap === 'no-wrap') {
+      if ('layoutWrap' in node) node.layoutWrap = 'NO_WRAP';
+    }
+    const cGap = props.rowGap != null ? props.rowGap : props.crossGap;
+    if (cGap != null && 'counterAxisSpacing' in node) {
+      await _oc.applyScalarBinding(node, 'counterAxisSpacing', cGap);
+    }
+
     // Default to HUG so frames don't get clipped to their initial 100×100.
     if ('primaryAxisSizingMode' in node) node.primaryAxisSizingMode = 'AUTO';
     if ('counterAxisSizingMode' in node) node.counterAxisSizingMode = 'AUTO';
@@ -1204,6 +1241,28 @@ const renderTree = async (tree, parent) => {
     else if (hugW && 'layoutSizingHorizontal' in node) node.layoutSizingHorizontal = 'HUG';
     if (fillH && 'layoutSizingVertical' in node) node.layoutSizingVertical = 'FILL';
     else if (hugH && 'layoutSizingVertical' in node) node.layoutSizingVertical = 'HUG';
+
+    const selfAlign = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'STRETCH', baseline: 'BASELINE' };
+    const as = props.alignSelf != null ? String(props.alignSelf).toLowerCase() : null;
+    if (as && selfAlign[as] != null && 'layoutAlign' in node) node.layoutAlign = selfAlign[as];
+
+    if (props.grow != null && 'layoutGrow' in node) {
+      let g = props.grow;
+      if (g === true) g = 1;
+      if (g === false) g = 0;
+      g = Number(g);
+      if (Number.isFinite(g)) node.layoutGrow = Math.max(0, g);
+    }
+
+    const setMinMax = (key, prop) => {
+      if (!(key in node) || props[prop] == null) return;
+      const v = Number(props[prop]);
+      if (Number.isFinite(v) && v >= 0) node[key] = v;
+    };
+    setMinMax('minWidth', 'minW');
+    setMinMax('maxWidth', 'maxW');
+    setMinMax('minHeight', 'minH');
+    setMinMax('maxHeight', 'maxH');
   }
 
   if (!isInstance) {

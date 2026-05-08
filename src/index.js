@@ -8,13 +8,18 @@ import { homedir } from 'os';
 import { FigmaClient, getConfiguredCdpPort, closeSharedFigmaTransport } from './core/figma-client.js';
 import { resolveNodeExecutable } from './core/node-exec.js';
 import * as ops from './core/operations.js';
-import { rebuildComponentSet, inputRecipe, buttonRecipe, applyTokens } from './core/recipes.js';
+import { rebuildComponentSet, inputRecipe, buttonRecipe, cardRecipe, badgeRecipe, heroRecipe, applyTokens } from './core/recipes.js';
 import { validateComponentSet } from './core/validate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = join(__dirname, '..', 'bin', 'opencode-figma');
 const SETTINGS_DIR = join(homedir(), '.opencode-figma');
 const SETTINGS_FILE = join(SETTINGS_DIR, 'settings.json');
+
+/** default | compact — only input/button recipes use this today. */
+function normalizeRecipePreset(p) {
+  return String(p || 'default').toLowerCase().trim() === 'compact' ? 'compact' : 'default';
+}
 
 /** Block models from answering with Figma tutorials instead of invoking tools (common GPT failure mode). */
 const FORBIDDEN_MANUAL_UI =
@@ -404,8 +409,14 @@ export const OpenCodeFigmaPlugin = async () => {
           '  • Text / H1 / H2 / H3 / H4 / Label — text nodes (size/weight/color)',
           '  • Rect / Ellipse — shapes',
           '  • Instance — place an existing component or component set (component="Button", variant="State=Hover, Size=Lg", and any other prop becomes a text override matched by node name).',
+          'Layout props (frames with flex/HStack/VStack): wrap + rowGap|crossGap (wrapped rows/columns), justify, items, gap, padding props as before.',
+          'Child-in-stack props (apply inside auto-layout parent): grow (number or true=1), alignSelf (start|center|end|stretch|baseline), minW maxW minH maxH.',
           'Props: name, w/h (number, or "fill"/"hug"), bg/fill, stroke/strokeWidth, rounded, opacity, flex ("row"/"col"), gap, p/px/py/pl/pr/pt/pb, justify ("start"/"center"/"end"/"between"), items, color (Text), size (Text), weight (Text).',
-          'Variables: COLOR — bg/fill/stroke/color use var:Collection/name. FLOAT — gap, p/px/py/pl/pr/pt/pb, rounded, strokeWidth, opacity, Text size use number or var:… for FLOAT tokens (setBoundVariable).',
+          'Examples:',
+          '  Toolbar: <HStack w={400} justify="between" items="center" gap={12} p={16}><Text>Logo</Text><Text>Menu</Text></HStack>',
+          '  Fill remainder: <HStack w={480}><Text>Fixed</Text><Frame grow={1} bg="#EEE" h={40}/></HStack>',
+          '  Wrap chips: <HStack flex="row" wrap gap={8} rowGap={8} w={320}><Text>Tag A</Text><Text>Tag B</Text></HStack>',
+          'Variables: COLOR — bg/fill/stroke/color use var:Collection/name. FLOAT — gap, rowGap/crossGap, p/px/py/…, rounded, strokeWidth, opacity, Text size use number or var:… for FLOAT tokens (setBoundVariable).',
           'Batch render multiple roots: [<A/>, <B/>].',
           'IMPORTANT: Reusable UI (Button/Input/Card/Badge…): use figma_recipe (recipe=button|input) OR figma_component action=create-set — never create separate components named "X Default/Hover/Disabled". When consuming in a layout, use <Instance component="Button"/>, never raw duplicate frames.'
         ].join('\n'),
@@ -623,7 +634,8 @@ export const OpenCodeFigmaPlugin = async () => {
       }),
 
       figma_lint: tool({
-        description: 'Run accessibility / design lints. rules: color-contrast (WCAG), touch-target-size (44×44 minimum), no-default-names. Returns a list of issues; empty when clean.',
+        description:
+          'Run accessibility / design lints. Omit rule to run: color-contrast, touch-target-size, no-default-names. Use rule=layout-grid alone to flag auto-layout gap/padding not on 4px steps (opt-in; noisy on mixed files).',
         args: {
           rule: tool.schema.string().optional(),
           nodeId: tool.schema.string().optional()
@@ -799,12 +811,14 @@ export const OpenCodeFigmaPlugin = async () => {
       figma_build: tool({
         description: [
           FORBIDDEN_MANUAL_UI,
-          'Use when the user asks you to CREATE / BUILD an input field, text field, or button (natural language). One call = full component set on their canvas.',
-          'Do not describe how THEY should click in Figma — you run this tool. Same automation as figma_recipe; this name is easier for agents to pick.',
-          'kind: input (Default/Hover/Disabled × Sm/Md/Lg) | button (Default/Hover/Disabled).'
+          'Use when the user asks you to CREATE / BUILD UI in their file. One call = deterministic component set on canvas.',
+          'Do not describe how THEY should click in Figma — you run this tool. Same automation as figma_recipe.',
+          'kind: input | button | card | badge | hero (aliases: text field → input; marketing hero → hero).',
+          'Optional preset=compact for input|button only (tighter spacing; default leaves current sizes).'
         ].join('\n'),
         args: {
-          kind: tool.schema.string().describe('input | button')
+          kind: tool.schema.string().describe('input | button | card | badge | hero'),
+          preset: tool.schema.string().optional().describe('default | compact (input and button only)')
         },
         execute: withErrorContext('figma_build', async (args) => {
           const c = await getClient();
@@ -812,16 +826,31 @@ export const OpenCodeFigmaPlugin = async () => {
             .toLowerCase()
             .trim()
             .replace(/\s+/g, ' ');
+          const preset = normalizeRecipePreset(args.preset);
           const isInput = kind === 'input' || kind === 'text field' || kind === 'textfield' || kind === 'text-field';
           if (isInput) {
-            const r = await rebuildComponentSet(c, inputRecipe({}));
+            const r = await rebuildComponentSet(c, inputRecipe({ preset }));
             return `Built Input set "${r.name}" (${r.id}) — ${r.variants.length} variants on canvas. Summarize that for the user; do not add manual Figma UI steps.`;
           }
           if (kind === 'button') {
-            const r = await rebuildComponentSet(c, buttonRecipe({}));
+            const r = await rebuildComponentSet(c, buttonRecipe({ preset }));
             return `Built Button set "${r.name}" (${r.id}) — ${r.variants.length} variant(s). Summarize for the user; no manual steps.`;
           }
-          throw new Error('figma_build: kind must be "input" or "button"');
+          if (kind === 'card') {
+            const r = await rebuildComponentSet(c, cardRecipe({}));
+            return `Built Card set "${r.name}" (${r.id}) — ${r.variants.length} variant(s).`;
+          }
+          if (kind === 'badge') {
+            const r = await rebuildComponentSet(c, badgeRecipe({}));
+            return `Built Badge set "${r.name}" (${r.id}) — ${r.variants.length} variant(s).`;
+          }
+          if (kind === 'hero' || kind === 'marketing hero' || kind === 'marketing-hero') {
+            const r = await rebuildComponentSet(c, heroRecipe({}));
+            return `Built Hero set "${r.name}" (${r.id}) — ${r.variants.length} variant(s).`;
+          }
+          throw new Error(
+            'figma_build: kind must be input | button | card | badge | hero (got: ' + kind + ')'
+          );
         })
       }),
 
@@ -830,26 +859,30 @@ export const OpenCodeFigmaPlugin = async () => {
           NL,
           'Run a deterministic, idempotent recipe (high-level generator).',
           'Use this when you want stable results without the model improvising structure.',
-          'OpenCode routing: Prefer figma_build OR this tool FIRST for Buttons/Inputs — never substitute Shell or human tutorials. recipe=button|input.',
+          'OpenCode routing: Prefer figma_build OR this tool FIRST for Buttons/Inputs/Cards/Badges/Hero — never substitute Shell or human tutorials.',
           '',
           'recipe:',
-          '  • "input" — rebuilds Input component set (Default/Hover/Disabled × Sm/Md/Lg — 9 variants, placeholder text in each). Hex colors by default; overrides strokeVar/bgVar/textVar may be var:name after tokens exist.',
-          '  • "button" — builds/refreshes a Button component set (State variants).',
+          '  • "input" — Input set (9 variants). Optional preset=compact. strokeVar/bgVar/textVar.',
+          '  • "button" — Button set (3 states). Optional preset=compact. buttonBgVar/buttonFgVar/buttonMutedBgVar/buttonMutedFgVar.',
+          '  • "card" — Card component (Title, Description, Action text).',
+          '  • "badge" — Badge set (Tone × Size, 4 variants).',
+          '  • "hero" — Hero / marketing block (single layout variant, CTA row).',
           '  • "token-apply" — applies a token map to the selection (or nodeIds).',
           '',
           'action:',
           '  • "rebuild" (default) — deletes existing component set by name and recreates it deterministically.'
         ].join('\n'),
         args: {
-          recipe: tool.schema.string().describe('Recipe name: input | button | token-apply'),
+          recipe: tool.schema.string().describe('input | button | card | badge | hero | token-apply'),
           action: tool.schema.string().optional().describe('rebuild (default)'),
+          preset: tool.schema.string().optional().describe('default | compact (input and button only)'),
           strokeVar: tool.schema.string().optional().describe('Input recipe: stroke (default hex #CBD5E1; or var:name)'),
           bgVar: tool.schema.string().optional().describe('Input recipe: Default-state fill (default #FFFFFF; or var:name)'),
           textVar: tool.schema.string().optional().describe('Input recipe: Default-state placeholder text fill (default #475569; or var:name)'),
-          buttonBgVar: tool.schema.string().optional().describe('Button bg variable (default var:primary)'),
-          buttonFgVar: tool.schema.string().optional().describe('Button fg variable (default var:primary-foreground)'),
-          buttonMutedBgVar: tool.schema.string().optional().describe('Disabled bg variable (default var:muted)'),
-          buttonMutedFgVar: tool.schema.string().optional().describe('Disabled fg variable (default var:muted-foreground)'),
+          buttonBgVar: tool.schema.string().optional().describe('Button bg (default #7C3AED or override)'),
+          buttonFgVar: tool.schema.string().optional().describe('Button fg'),
+          buttonMutedBgVar: tool.schema.string().optional().describe('Disabled bg'),
+          buttonMutedFgVar: tool.schema.string().optional().describe('Disabled fg'),
           nodeIds: tool.schema.array(tool.schema.string()).optional().describe('For token-apply: explicit target node ids (defaults to current selection)'),
           tokens: tool.schema.object({}).optional().describe('For token-apply: token map (fill/bg/stroke/text, radius, gap, padding, opacity, fontSize, deep=true to recurse)')
         },
@@ -857,12 +890,14 @@ export const OpenCodeFigmaPlugin = async () => {
           const c = await getClient();
           const recipe = String(args.recipe || '').toLowerCase();
           const action = String(args.action || 'rebuild').toLowerCase();
+          const preset = normalizeRecipePreset(args.preset);
 
           if (recipe === 'input') {
             const spec = inputRecipe({
               strokeVar: args.strokeVar,
               bgVar: args.bgVar,
-              textVar: args.textVar
+              textVar: args.textVar,
+              preset
             });
             if (action !== 'rebuild') throw new Error('Unsupported action for input: ' + action);
             const r = await rebuildComponentSet(c, spec);
@@ -873,10 +908,26 @@ export const OpenCodeFigmaPlugin = async () => {
               bgVar: args.buttonBgVar,
               fgVar: args.buttonFgVar,
               mutedBgVar: args.buttonMutedBgVar,
-              mutedFgVar: args.buttonMutedFgVar
+              mutedFgVar: args.buttonMutedFgVar,
+              preset
             });
             if (action !== 'rebuild') throw new Error('Unsupported action for button: ' + action);
             const r = await rebuildComponentSet(c, spec);
+            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
+          }
+          if (recipe === 'card') {
+            if (action !== 'rebuild') throw new Error('Unsupported action for card: ' + action);
+            const r = await rebuildComponentSet(c, cardRecipe({}));
+            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
+          }
+          if (recipe === 'badge') {
+            if (action !== 'rebuild') throw new Error('Unsupported action for badge: ' + action);
+            const r = await rebuildComponentSet(c, badgeRecipe({}));
+            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
+          }
+          if (recipe === 'hero') {
+            if (action !== 'rebuild') throw new Error('Unsupported action for hero: ' + action);
+            const r = await rebuildComponentSet(c, heroRecipe({}));
             return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
           }
           if (recipe === 'token-apply' || recipe === 'tokens' || recipe === 'apply-tokens') {
@@ -890,7 +941,8 @@ export const OpenCodeFigmaPlugin = async () => {
       }),
 
       figma_validate: tool({
-        description: 'Validate a component set structure and variant completeness. Returns actionable issues.',
+        description:
+          'Validate a component set structure and variant completeness. Use after figma_recipe / figma_build for Input, Button, Card, Badge, Hero, etc. Returns actionable issues.',
         args: {
           type: tool.schema.string().describe('Validation type: component-set'),
           name: tool.schema.string().describe('Component set name to validate (e.g. Input)')

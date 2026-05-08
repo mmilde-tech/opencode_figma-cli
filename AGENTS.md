@@ -233,6 +233,11 @@ pl/pr/pt/pb={...}
 // Alignment
 justify="center"        // main axis: start | center | end | between
 items="center"          // cross axis: start | center | end
+wrap                    // boolean or wrap / nowrap — row wraps to next line
+rowGap={8}              // gap between wrapped rows (counterAxisSpacing); alias crossGap
+alignSelf="stretch"    // on child: start | center | end | stretch | baseline
+grow={1}               // layoutGrow inside auto-layout (true = 1)
+minW maxW minH maxH     // min/max constraints (numbers)
 
 // Size
 w={320} h={200}         // fixed

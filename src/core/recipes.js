@@ -146,23 +146,28 @@ export async function applyTokens(client, args = {}) {
 }
 
 /**
- * Input recipe: a robust starting point with strict node naming.
- * Variants are intentionally small: State × Size.
- */
-/**
  * Input field component set — hex defaults work without variables (Windows/Mac parity).
  * Optional args still accept var:name after you create tokens via figma_tokens.
+ * @param {'default'|'compact'} preset — compact = tighter heights, padding, radii (same 9 variants).
  */
 export function inputRecipe({
   strokeVar = '#CBD5E1',
   bgVar = '#FFFFFF',
-  textVar = '#475569'
+  textVar = '#475569',
+  preset = 'default'
 } = {}) {
-  const sizes = [
-    { Size: 'Sm', h: 36, px: 12, text: 13, r: 8 },
-    { Size: 'Md', h: 40, px: 14, text: 14, r: 10 },
-    { Size: 'Lg', h: 44, px: 16, text: 15, r: 12 }
-  ];
+  const compact = String(preset || 'default').toLowerCase() === 'compact';
+  const sizes = compact
+    ? [
+        { Size: 'Sm', h: 32, px: 10, text: 12, r: 6 },
+        { Size: 'Md', h: 36, px: 12, text: 13, r: 8 },
+        { Size: 'Lg', h: 40, px: 14, text: 14, r: 10 }
+      ]
+    : [
+        { Size: 'Sm', h: 36, px: 12, text: 13, r: 8 },
+        { Size: 'Md', h: 40, px: 14, text: 14, r: 10 },
+        { Size: 'Lg', h: 44, px: 16, text: 15, r: 12 }
+      ];
   const states = [
     { State: 'Default', strokeWidth: 1, opacity: 1, bg: bgVar, fg: textVar, st: strokeVar },
     { State: 'Hover', strokeWidth: 1.5, opacity: 1, bg: '#F8FAFC', fg: '#334155', st: '#94A3B8' },
@@ -185,15 +190,25 @@ export function inputRecipe({
 
 /**
  * Button recipe: State variants with a named Label text node.
+ * @param {'default'|'compact'} preset — compact = slightly smaller padding, radius, type.
  */
 export function buttonRecipe({
   bgVar = '#7C3AED',
   fgVar = '#FFFFFF',
   mutedBgVar = '#E5E7EB',
-  mutedFgVar = '#6B7280'
+  mutedFgVar = '#6B7280',
+  preset = 'default'
 } = {}) {
-  const base = (over) => `<Frame name="Button" flex="row" gap={8} px={16} py={10} rounded={8} justify="center" items="center" ${over}>
-  <Text name="Label" size={14} weight="medium" color="${fgVar}">Button</Text>
+  const compact = String(preset || 'default').toLowerCase() === 'compact';
+  const gap = compact ? 6 : 8;
+  const px = compact ? 14 : 16;
+  const py = compact ? 8 : 10;
+  const r = compact ? 6 : 8;
+  const fs = compact ? 13 : 14;
+
+  const base = (over) =>
+    `<Frame name="Button" flex="row" gap={${gap}} px={${px}} py={${py}} rounded={${r}} justify="center" items="center" ${over}>
+  <Text name="Label" size={${fs}} weight="medium" color="${fgVar}">Button</Text>
 </Frame>`;
 
   return {
@@ -209,10 +224,96 @@ export function buttonRecipe({
       },
       {
         properties: { State: 'Disabled' },
-        jsx: `<Frame name="Button" flex="row" gap={8} px={16} py={10} rounded={8} justify="center" items="center" bg="${mutedBgVar}" opacity={0.6}>
-  <Text name="Label" size={14} weight="medium" color="${mutedFgVar}">Button</Text>
+        jsx: `<Frame name="Button" flex="row" gap={${gap}} px={${px}} py={${py}} rounded={${r}} justify="center" items="center" bg="${mutedBgVar}" opacity={0.6}>
+  <Text name="Label" size={${fs}} weight="medium" color="${mutedFgVar}">Button</Text>
 </Frame>`
       }
+    ]
+  };
+}
+
+/**
+ * Marketing-style hero block (single variant). Named text nodes for instance overrides.
+ * Hex defaults work without design tokens.
+ */
+export function heroRecipe({
+  bg = '#F8FAFC',
+  eyebrowColor = '#64748B',
+  titleColor = '#0F172A',
+  subtitleColor = '#475569',
+  primaryCtaColor = '#FFFFFF',
+  primaryCtaBg = '#7C3AED',
+  secondaryColor = '#475569',
+  secondaryStroke = '#CBD5E1'
+} = {}) {
+  return {
+    name: 'Hero',
+    variants: [
+      {
+        properties: { Layout: 'Default' },
+        jsx: `<Frame name="Hero" flex="col" gap={16} p={48} bg="${bg}" w={960}>
+  <Text name="Eyebrow" size={12} weight="medium" color="${eyebrowColor}">New</Text>
+  <Text name="Title" size={40} weight="bold" color="${titleColor}">Headline that converts</Text>
+  <Text name="Subtitle" size={18} color="${subtitleColor}">One or two sentences about your product. Keep it clear and benefit-led.</Text>
+  <Frame name="Actions" flex="row" gap={12}>
+    <Frame name="PrimaryCta" flex="row" px={20} py={12} rounded={8} bg="${primaryCtaBg}" justify="center" items="center">
+      <Text name="PrimaryCtaLabel" size={14} weight="semibold" color="${primaryCtaColor}">Get started</Text>
+    </Frame>
+    <Frame name="SecondaryCta" flex="row" px={20} py={12} rounded={8} stroke="${secondaryStroke}" strokeWidth={1} justify="center" items="center">
+      <Text name="SecondaryCtaLabel" size={14} weight="medium" color="${secondaryColor}">Learn more</Text>
+    </Frame>
+  </Frame>
+</Frame>`
+      }
+    ]
+  };
+}
+
+/**
+ * Card with Title, Description, and Action text. Hex defaults; use var: after tokens exist.
+ */
+export function cardRecipe({
+  bg = '#FFFFFF',
+  stroke = '#E2E8F0',
+  titleColor = '#0F172A',
+  descColor = '#64748B',
+  actionColor = '#7C3AED'
+} = {}) {
+  return {
+    name: 'Card',
+    variants: [
+      {
+        properties: { Style: 'Default' },
+        jsx: `<Frame name="Card" flex="col" gap={12} p={20} bg="${bg}" stroke="${stroke}" strokeWidth={1} rounded={12} w={320}>
+  <Text name="Title" size={18} weight="semibold" color="${titleColor}">Card title</Text>
+  <Text name="Description" size={14} color="${descColor}">Short description goes here.</Text>
+  <Text name="Action" size={14} weight="medium" color="${actionColor}">View details</Text>
+</Frame>`
+      }
+    ]
+  };
+}
+
+/** Badge pill — Tone × Size (4 variants). */
+export function badgeRecipe({
+  defaultBg = '#EEF2FF',
+  defaultFg = '#4338CA',
+  mutedBg = '#F1F5F9',
+  mutedFg = '#64748B'
+} = {}) {
+  const row = (tone, size, px, py, fs, bg, fg) => ({
+    properties: { Tone: tone, Size: size },
+    jsx: `<Frame name="Badge" flex="row" items="center" justify="center" px={${px}} py={${py}} rounded={999} bg="${bg}">
+  <Text name="Label" size={${fs}} weight="medium" color="${fg}">Badge</Text>
+</Frame>`
+  });
+  return {
+    name: 'Badge',
+    variants: [
+      row('Default', 'Sm', 8, 4, 12, defaultBg, defaultFg),
+      row('Default', 'Md', 10, 5, 13, defaultBg, defaultFg),
+      row('Muted', 'Sm', 8, 4, 12, mutedBg, mutedFg),
+      row('Muted', 'Md', 10, 5, 13, mutedBg, mutedFg)
     ]
   };
 }
