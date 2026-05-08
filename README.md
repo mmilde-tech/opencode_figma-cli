@@ -39,7 +39,7 @@ opencode-figma connect
 ```
 Or use
 ```bash
-figma connect
+figma_connect
 ```
 
 Or ask OpenCode: "Connect to Figma"
