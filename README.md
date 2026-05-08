@@ -22,28 +22,13 @@ cd /path/to/opencode-figma
 npm run setup
 ```
 
-What it does:
-
-1. Runs **`npm install`** (skip with `node scripts/setup-local.mjs --skip-install` after you've already installed).
-2. Runs **`npm link`** so `opencode-figma` is on your PATH (skip with `--no-global-cli` if you only use OpenCode tools and never the CLI).
-3. Ensures OpenCode's plugins folder exists and drops **`opencode-figma.js`** there:
-   - **macOS / Linux:** `~/.config/opencode/plugins/`
-   - **Windows:** `%APPDATA%\opencode\plugins\`
-   - Override with **`OPENCODE_PLUGINS_DIR`** if your layout differs.
-4. Registers **`opencode-figma.js`** as either a **symlink** to **`src/index.js`** (best), or—if symlinks fail (common on Windows without Developer Mode)—a tiny **stub file** that re-exports the real entry via `file://` so imports and the CLI path stay correct (plain copying would break). Force stub mode: **`npm run setup:copy`** or **`--copy`**. After moving the repo on Windows, re-run **`npm run setup`** so broken symlinks in the plugins folder are replaced — the installer removes dangling links reliably.
-5. Verifies the plugin loads and prints how many tools were registered (expect **19** `figma_*` tools).
-
 ```bash
 node scripts/setup-local.mjs --help   # all flags
 ```
 
-### Don't list it in opencode.json yet
-
-Do **not** add `"plugin": ["opencode-figma"]` to `opencode.json` until the package is published — OpenCode would try to install it from npm. Loading from the plugins directory is enough.
-
 ### Manual install (if you prefer)
 
-Same outcome as the script: `npm install`, `npm link`, then symlink or stub-loader **`opencode-figma.js`** pointing at your repo’s **`src/index.js`** under the paths above (do not paste `index.js` into plugins manually — relative imports will break).
+Same outcome as the script: `npm install`, `npm link`, then symlink or stub-loader **`opencode-figma.js`** pointing at your repo’s **`src/index.js`** under OpenCode’s plugins folder (`~/.config/opencode/plugins/` on macOS/Linux, `%APPDATA%\opencode\plugins\` on Windows; set **`OPENCODE_PLUGINS_DIR`** if yours differs). Do not paste `index.js` into plugins manually — relative imports will break.
 
 ## Quick Start
 
