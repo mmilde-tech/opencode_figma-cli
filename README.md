@@ -15,16 +15,26 @@ OpenCode plugin for Figma integration via Yolo Mode (CDP). Control Figma Desktop
 
 ## Installation
 
-The package is not on npm yet. From a clone of this repo, run **one command**:
+The package is not on npm yet. From a clone of this repo:
+
+### OpenCode Desktop (step-by-step)
+
+1. Open the **OpenCode** desktop app.
+2. **Open Project** and choose your cloned **opencode-figma** folder (the repo root with `package.json`).
+3. Open the **integrated Terminal**.
+4. Run **`npm install`**, then **`npm run setup`**.
+5. **Quit and reopen OpenCode** so the plugin loads.
+
+Full detail, troubleshooting, and uninstall: **[SETUP_GUIDE.md](./SETUP_GUIDE.md)**.
+
+### Terminal only (quick path)
 
 ```bash
 cd /path/to/opencode-figma
+npm install
 npm run setup
 ```
 
-### Manual install (if you prefer)
-
-Same outcome as the script: `npm install`, `npm link`, then symlink or stub-loader **`opencode-figma.js`** pointing at your repo’s **`src/index.js`** under OpenCode’s plugins folder (`~/.config/opencode/plugins/` on macOS/Linux, `%APPDATA%\opencode\plugins\` on Windows; set **`OPENCODE_PLUGINS_DIR`** if yours differs). Do not paste `index.js` into plugins manually — relative imports will break.
 
 ## Quick Start
 
@@ -33,17 +43,14 @@ Same outcome as the script: `npm install`, `npm link`, then symlink or stub-load
 ```bash
 opencode-figma connect
 ```
-Or use
+
+Or
 ```bash
 figma_connect
 ```
 
 Or ask OpenCode: "Connect to Figma"
 
-This will:
-1. Patch Figma Desktop (one-time) to enable Chrome DevTools Protocol
-2. Launch Figma with remote debugging if it’s not already running (or reuse an open session)
-3. Wait for a **canvas tab** (open a file from Recents if Figma shows home only — up to ~90s), then connect via CDP
 
 ### 2. Start Using It
 
