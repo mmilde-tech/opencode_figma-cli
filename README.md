@@ -37,6 +37,10 @@ Same outcome as the script: `npm install`, `npm link`, then symlink or stub-load
 ```bash
 opencode-figma connect
 ```
+Or use
+```bash
+figma connect
+```
 
 Or ask OpenCode: "Connect to Figma"
 
