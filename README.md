@@ -45,19 +45,6 @@ Do **not** add `"plugin": ["opencode-figma"]` to `opencode.json` until the packa
 
 Same outcome as the script: `npm install`, `npm link`, then symlink or stub-loader **`opencode-figma.js`** pointing at your repo’s **`src/index.js`** under the paths above (do not paste `index.js` into plugins manually — relative imports will break).
 
-### Once published to npm
-
-If you publish this package, users can instead just write:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-figma"]
-}
-```
-
-OpenCode will install it into its package cache automatically.
-
 ## Quick Start
 
 ### 1. Connect to Figma (Yolo Mode)
