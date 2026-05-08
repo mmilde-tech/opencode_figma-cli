@@ -22,10 +22,6 @@ cd /path/to/opencode-figma
 npm run setup
 ```
 
-```bash
-node scripts/setup-local.mjs --help   # all flags
-```
-
 ### Manual install (if you prefer)
 
 Same outcome as the script: `npm install`, `npm link`, then symlink or stub-loader **`opencode-figma.js`** pointing at your repo’s **`src/index.js`** under OpenCode’s plugins folder (`~/.config/opencode/plugins/` on macOS/Linux, `%APPDATA%\opencode\plugins\` on Windows; set **`OPENCODE_PLUGINS_DIR`** if yours differs). Do not paste `index.js` into plugins manually — relative imports will break.
