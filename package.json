@@ -1,0 +1,52 @@
+{
+  "name": "opencode-figma",
+  "version": "1.2.3",
+  "description": "OpenCode plugin for Figma integration via Yolo Mode (CDP). Control Figma Desktop directly from OpenCode.",
+  "author": "M.Milde <m.milde@gmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "opencode-figma": "bin/opencode-figma"
+  },
+  "files": [
+    "src",
+    "bin",
+    "scripts",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode-plugin",
+    "opencode",
+    "figma",
+    "design-system",
+    "design-tokens",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "ora": "^8.0.0",
+    "ws": "^8.16.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.4.6"
+  },
+  "scripts": {
+    "setup": "node scripts/setup-local.mjs",
+    "setup:copy": "node scripts/setup-local.mjs --copy",
+    "test": "node --test tests/*.test.js"
+  }
+}

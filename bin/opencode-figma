@@ -1,0 +1,197 @@
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import chalk from 'chalk';
+import ora from 'ora';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+
+const program = new Command();
+
+program
+  .name('opencode-figma')
+  .description('OpenCode plugin for Figma - Control Figma Desktop via CLI')
+  .version(pkg.version);
+
+// ============ CONNECT ============
+program
+  .command('connect')
+  .description('Connect to Figma Desktop (CDP / Yolo Mode)')
+  .option('--force-restart', 'Always quit and restart Figma (skip fast reconnect when CDP already works)')
+  .action(async (options) => {
+    const { default: connectCommand } = await import('../src/cli/connect.js');
+    await connectCommand(options);
+  });
+
+// ============ CREATE ============
+program
+  .command('create <type> [name]')
+  .description('Create Figma elements: frame, text, rect, circle, icon, etc.')
+  .option('-c, --content <text>', 'Text content (for text type)')
+  .option('-w, --width <pixels>', 'Width in pixels')
+  .option('-h, --height <pixels>', 'Height in pixels')
+  .option('-f, --fill <color>', 'Fill color (hex or var:name)')
+  .option('-s, --stroke <color>', 'Stroke color')
+  .option('--stroke-width <pixels>', 'Stroke width')
+  .option('-r, --rounded <pixels>', 'Corner radius')
+  .option('--icon <name>', 'Icon name (for icon type)')
+  .action(async (type, name, options) => {
+    const { default: createCommand } = await import('../src/cli/create.js');
+    await createCommand(type, name, options);
+  });
+
+// ============ SET ============
+program
+  .command('set <property> <value>')
+  .description('Set properties on selected elements or by ID')
+  .option('-n, --node <id>', 'Node ID to modify (uses selection if not provided)')
+  .action(async (property, value, options) => {
+    const { default: setCommand } = await import('../src/cli/set.js');
+    await setCommand(property, value, options);
+  });
+
+// ============ TOKENS ============
+program
+  .command('tokens [preset]')
+  .description('Add design tokens presets (shadcn, tailwind, ds)')
+  .action(async (preset, options) => {
+    const { default: tokensCommand } = await import('../src/cli/tokens.js');
+    await tokensCommand(preset, options);
+  });
+
+// ============ VARIABLES ============
+program
+  .command('var <action> [name]')
+  .description('Manage variables: list, create, delete-all, find, visualize')
+  .option('-c, --collection <name>', 'Collection name or ID')
+  .option('-t, --type <type>', 'Variable type: COLOR, FLOAT, STRING, BOOLEAN')
+  .option('-v, --value <value>', 'Initial value')
+  .option('--filter <pattern>', 'Filter by name pattern')
+  .action(async (action, name, options) => {
+    if (name && !options.name) options.name = name;
+    const { default: varCommand } = await import('../src/cli/variable.js');
+    await varCommand(action, options);
+  });
+
+// ============ RENDER ============
+program
+  .command('render <jsx>')
+  .description('Render JSX components in Figma')
+  .action(async (jsx, options) => {
+    const { default: renderCommand } = await import('../src/cli/render.js');
+    await renderCommand(jsx, options);
+  });
+
+program
+  .command('render-batch <jsx-array>')
+  .description('Render multiple JSX components (faster for batches)')
+  .action(async (jsxArray, options) => {
+    const { renderBatchCommand } = await import('../src/cli/render.js');
+    await renderBatchCommand(jsxArray, true, options);
+  });
+
+// ============ EXPORT ============
+program
+  .command('export <format> [nodeId]')
+  .description('Export nodes as PNG, SVG, JSX, storybook')
+  .option('-s, --scale <factor>', 'Scale factor (1, 2, 3)')
+  .option('-o, --output <path>', 'Output file path')
+  .action(async (format, nodeId, options) => {
+    const { default: exportCommand } = await import('../src/cli/export.js');
+    await exportCommand(format, nodeId, options);
+  });
+
+// ============ ANALYZE ============
+program
+  .command('analyze <type>')
+  .description('Analyze design: colors, typography, spacing, canvas')
+  .option('-n, --node <id>', 'Node ID to analyze')
+  .action(async (type, options) => {
+    const { default: analyzeCommand } = await import('../src/cli/analyze.js');
+    await analyzeCommand(type, options);
+  });
+
+// ============ LINT ============
+program
+  .command('lint')
+  .description('Run accessibility and design linting')
+  .option('-r, --rule <name>', 'Specific rule to run')
+  .option('-n, --node <id>', 'Node ID to lint')
+  .action(async (options) => {
+    const { default: lintCommand } = await import('../src/cli/lint.js');
+    await lintCommand(options);
+  });
+
+// ============ FIND ============
+program
+  .command('find <pattern>')
+  .description('Find nodes by name, type, or XPath')
+  .option('-t, --type <type>', 'Filter by type: FRAME, TEXT, COMPONENT, etc.')
+  .action(async (pattern, options) => {
+    const { default: findCommand } = await import('../src/cli/find.js');
+    await findCommand(pattern, options);
+  });
+
+// ============ CANVAS ============
+program
+  .command('canvas <action>')
+  .description('Canvas operations: info, list, arrange, zoom-fit, clear')
+  .option('-l, --layout <type>', 'Layout for arrange: grid, column')
+  .action(async (action, options) => {
+    const { default: canvasCommand } = await import('../src/cli/canvas.js');
+    await canvasCommand(action, options);
+  });
+
+// ============ DAEMON ============
+program
+  .command('daemon <action>')
+  .description('Control speed daemon: start, stop, restart, status')
+  .action(async (action, options) => {
+    const { default: daemonCommand } = await import('../src/cli/daemon.js');
+    await daemonCommand(action, options);
+  });
+
+// ============ SCREENSHOT ============
+program
+  .command('screenshot [nodeId]')
+  .description('Take a screenshot of canvas or specific node')
+  .option('-o, --output <path>', 'Output file path')
+  .action(async (nodeId, options) => {
+    const { default: screenshotCommand } = await import('../src/cli/screenshot.js');
+    await screenshotCommand(nodeId, options);
+  });
+
+// ============ EVAL ============
+program
+  .command('eval <code>')
+  .description('Execute raw Figma Plugin API code')
+  .action(async (code, options) => {
+    const { default: evalCommand } = await import('../src/cli/eval.js');
+    await evalCommand(code, options);
+  });
+
+// ============ NODE OPS ============
+program
+  .command('node <action> [args...]')
+  .description('Node operations: to-component, delete, group, ungroup')
+  .action(async (action, args, options) => {
+    const { default: nodeCommand } = await import('../src/cli/node.js');
+    await nodeCommand(action, args, options);
+  });
+
+// ============ COLLECTION ============
+program
+  .command('collection <action> [name]')
+  .description('Manage variable collections: list, create, delete')
+  .action(async (action, name, options) => {
+    const { default: collectionCommand } = await import('../src/cli/collection.js');
+    await collectionCommand(action, name, options);
+  });
+
+// Parse CLI args
+program.parse();
