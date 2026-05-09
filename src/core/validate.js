@@ -1,6 +1,64 @@
 // Validators: read-only-ish checks that return actionable issues.
 // (Implementation uses CDP eval but does not mutate document state.)
 
+import { parseJSX } from './operations.js';
+
+const TEXT_TAGS = new Set(['text', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'label']);
+
+function walkJsxTree(node, visit) {
+  if (typeof node === 'string') return;
+  visit(node);
+  for (const c of node.children || []) walkJsxTree(c, visit);
+}
+
+/**
+ * Offline validation for figma_component create-set payloads (before CDP).
+ * Catches parse errors and empty text nodes (common model mistake).
+ */
+export function validateCreateSetVariants(variants) {
+  const issues = [];
+  if (!Array.isArray(variants) || variants.length === 0) {
+    issues.push({ kind: 'variants', message: 'variants must be a non-empty array' });
+    return { ok: false, issues };
+  }
+  variants.forEach((v, i) => {
+    const n = i + 1;
+    if (!v || typeof v !== 'object') {
+      issues.push({ kind: 'variant', message: `Variant ${n}: expected object` });
+      return;
+    }
+    const jsx = v.jsx;
+    if (typeof jsx !== 'string' || !jsx.trim()) {
+      issues.push({ kind: 'jsx', message: `Variant ${n}: jsx must be a non-empty string` });
+      return;
+    }
+    let trees;
+    try {
+      trees = parseJSX(jsx);
+    } catch (e) {
+      issues.push({ kind: 'parse', message: `Variant ${n}: ${e.message}` });
+      return;
+    }
+    if (trees.length !== 1) {
+      issues.push({ kind: 'jsx', message: `Variant ${n}: expected exactly one root JSX element` });
+      return;
+    }
+    walkJsxTree(trees[0], (node) => {
+      const tag = String(node.tag || '').toLowerCase();
+      if (!TEXT_TAGS.has(tag)) return;
+      const strings = (node.children || []).filter((c) => typeof c === 'string');
+      const text = strings.join('').trim();
+      if (!text) {
+        issues.push({
+          kind: 'text',
+          message: `Variant ${n}: <${node.tag}> has no text content (avoid self-closing Text)`
+        });
+      }
+    });
+  });
+  return { ok: issues.length === 0, issues };
+}
+
 export async function validateComponentSet(client, { name, requiredVariantProps = ['State', 'Size'], requiredTextNodes = ['Value'] }) {
   if (!name) throw new Error('name required');
   const ctx = { name, requiredVariantProps, requiredTextNodes };

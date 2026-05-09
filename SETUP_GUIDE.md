@@ -1,182 +1,121 @@
-# opencode-figma Plugin - Complete Setup Guide
+# opencode-figma — Setup guide
 
-## ✅ Installation Complete!
+## Install using OpenCode Desktop
 
-The `opencode-figma` plugin has been successfully created and installed.
+1. Open the **OpenCode** desktop app.
+2. **Open Project** and select the folder where you cloned **opencode-figma** (the repo root — the folder that contains `package.json` and `src/`).
+3. Open the **integrated Terminal** in OpenCode (View → Terminal, or your usual shortcut).
+4. Run:
+   ```bash
+   npm install
+   ```
+5. Run:
+   ```bash
+   npm run setup
+   ```
+6. **Fully quit and reopen OpenCode** so it picks up the plugin loader in the OpenCode plugins folder.
 
-## What Was Created
+After that, open **Figma Desktop** and a real **design file** (a canvas tab — not only the home screen). In OpenCode, use natural language (e.g. “connect to Figma”) or invoke `figma_*` tools; the first connection may run local CDP setup automatically.
 
-### 1. Standalone npm Package
-Location: `/Users/m.milde/Work/opencode-figma`
+### If `npm run setup` warns about symlinks (common on Windows)
+
+Use the stub loader instead (same outcome):
+
+```bash
+npm run setup:copy
+```
+
+Or: `node scripts/setup-local.mjs --copy`
+
+### Local install vs `opencode.json`
+
+For a **git clone** / local dev install, you **do not** need `"plugin": ["opencode-figma"]` in `opencode.json` — and you should **not** add it until the package is **published on npm**, or OpenCode may try to fetch it from the registry.  
+The `setup` script registers the plugin by placing **`opencode-figma.js`** here:
+
+- **Windows:** `%APPDATA%\opencode\plugins\`
+- **macOS / Linux:** `~/.config/opencode/plugins/`
+
+Override with the **`OPENCODE_PLUGINS_DIR`** environment variable if your OpenCode install uses a custom path.
+
+---
+
+## What `npm run setup` does
+
+1. Installs npm dependencies (unless you pass `--skip-install` to the script).
+2. Runs **`npm link`** so the `opencode-figma` CLI is on your PATH (skip with `--no-global-cli` if you only use OpenCode tools).
+3. Writes **`opencode-figma.js`** into OpenCode’s plugins directory — symlink to `src/index.js` when possible, otherwise a small stub that imports the real file URL.
+4. Creates **`~/.opencode-figma/settings.json`** with defaults if missing (e.g. `strict: false`).
+5. Optionally runs a best-effort **`connect`** smoke test (skip with `--no-connect`).
+
+```bash
+node scripts/setup-local.mjs --help
+```
+
+---
+
+## Use from OpenCode
+
+Ask in plain language, for example:
+
+- “Connect to Figma”
+- “Add shadcn colors”
+- “Build a button component set”
+- “Render a hero section with JSX”
+
+See **AGENTS.md** and **README.md** for tool behavior and JSX syntax.
+
+---
+
+## Figma and Yolo Mode (CDP)
+
+The plugin talks to **Figma Desktop** over the **Chrome DevTools Protocol** after a one-time patch. `connect` may restart Figma with remote debugging; you need an **open design file** so a canvas tab exists.
+
+### macOS: permission errors
+
+**System Settings → Privacy & Security → Full Disk Access** — add the app that runs the terminal (Terminal, OpenCode, etc.), then quit and reopen that app.
+
+---
+
+## Uninstall / reset (fresh install)
+
+1. Stop the daemon if you use it: `opencode-figma daemon stop`
+2. Delete **`opencode-figma.js`** from `%APPDATA%\opencode\plugins\` (Windows) or `~/.config/opencode/plugins/` (macOS/Linux).
+3. Remove the global link: `npm unlink -g opencode-figma`
+4. Optionally delete **`%USERPROFILE%\.opencode-figma`** (Windows) or **`~/.opencode-figma`** (macOS/Linux) for a clean config.
+
+Then run **`npm install`** and **`npm run setup`** again from the repo.
+
+---
+
+## CLI (optional)
+
+After setup, from any terminal:
+
+```bash
+opencode-figma connect
+opencode-figma --help
+```
+
+If the command is not found, use:
+
+```bash
+node path/to/opencode-figma/bin/opencode-figma connect
+```
+
+---
+
+## Reference: project layout
 
 ```
 opencode-figma/
-├── package.json          # npm package config
-├── README.md            # Documentation
-├── AGENTS.md            # OpenCode instructions
-├── SUMMARY.md          # Implementation details
-├── bin/
-│   └── opencode-figma # CLI executable
+├── package.json
+├── bin/opencode-figma      # CLI entry
+├── scripts/setup-local.mjs # install/register script
 ├── src/
-│   ├── index.js        # OpenCode plugin (main export)
-│   ├── cli/            # CLI command implementations
-│   └── core/           # CDP client, patching, daemon
-└── node_modules/        # Dependencies
+│   ├── index.js           # OpenCode plugin export
+│   ├── cli/
+│   └── core/
+├── README.md
+├── AGENTS.md
+└── SETUP_GUIDE.md
 ```
-
-### 2. OpenCode Plugin Installed
-Location: `~/.config/opencode/plugins/`
-
-The plugin has been copied to OpenCode's plugin directory and is configured in `~/.config/opencode/opencode.json`.
-
-## Plugin Tools Available
-
-| Tool | Description |
-|------|-------------|
-| `figma_connect` | Connect to Figma Desktop via Yolo Mode |
-| `figma_create` | Create elements (frame, text, shapes) |
-| `figma_set` | Set properties (fill, stroke, etc.) |
-| `figma_tokens` | Add design tokens (shadcn, tailwind) |
-| `figma_export` | Export as PNG, SVG, JSX |
-| `figma_analyze` | Analyze designs (colors, typography) |
-| `figma_find` | Find nodes by name/type |
-| `figma_variable` | Manage Figma variables |
-| `figma_daemon` | Control speed daemon |
-| `figma_screenshot` | Take screenshots |
-
-## How to Use
-
-### As OpenCode Plugin
-
-1. **Start OpenCode** in your project:
-   ```bash
-   opencode
-   ```
-
-2. **Connect to Figma** (ask OpenCode):
-   ```
-   "Connect to Figma"
-   ```
-
-3. **Use the tools** (ask OpenCode):
-   ```
-   "Add shadcn colors to my project"
-   "Create a blue card with rounded corners"
-   "Show me what's on the canvas"
-   "Export this frame as PNG"
-   ```
-
-### As Standalone CLI
-
-```bash
-# Connect to Figma
-opencode-figma connect
-
-# Create elements
-opencode-figma create frame "My Frame" --width 320 --height 200
-
-# Add tokens
-opencode-figma tokens shadcn
-
-# Export
-opencode-figma export png
-```
-
-## Configuration
-
-### OpenCode Config (`~/.config/opencode/opencode.json`)
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-figma"],
-  "mcp": {
-    "pencil": {
-      "command": ["/Users/m.milde/.pencil/mcp/cursor/out/mcp-server-darwin-arm64", "--app", "cursor"],
-      "enabled": true,
-      "type": "local"
-    }
-  }
-}
-```
-
-### Figma Connection (`~/.opencode-figma/config.json`)
-```json
-{
-  "patched": true,
-  "cdpPort": 9274
-}
-```
-
-## Yolo Mode (CDP Patching)
-
-The plugin uses **Yolo Mode** by default:
-
-1. **Patches Figma** to enable Chrome DevTools Protocol
-2. **Random port** (9222-9322) for security
-3. **Speed daemon** for 10x faster commands
-4. **Cross-platform**: macOS + Windows supported
-
-### macOS Full Disk Access
-
-If you get permission errors:
-1. Open **System Settings** → **Privacy & Security** → **Full Disk Access**
-2. Click **+** and add **Terminal**
-3. Quit Terminal completely (Cmd+Q) and reopen
-
-## Testing Status
-
-✅ **CLI Commands**: Working (connect, create, tokens, etc.)
-✅ **Plugin Structure**: Loads correctly in Node.js
-✅ **Figma Connection**: Successfully connects via CDP (macOS)
-✅ **OpenCode Config**: Plugin registered in opencode.json
-⚠️ **Full Integration**: Needs testing in actual OpenCode session
-
-## Next Steps
-
-1. **Test in OpenCode**:
-   - Start `opencode` in your terminal
-   - Type: `"Connect to Figma"`
-   - Verify the plugin tools are available
-
-2. **Test Each Tool**:
-   - `figma_create` - Create frames, text, shapes
-   - `figma_tokens` - Add shadcn/tailwind tokens
-   - `figma_export` - Export as PNG/SVG
-   - etc.
-
-3. **Publish to npm** (optional):
-   ```bash
-   cd /Users/m.milde/Work/opencode-figma
-   npm publish
-   ```
-
-4. **Install on Other Computers**:
-   ```bash
-   npm install -g opencode-figma
-   ```
-
-## Files Summary
-
-### Created Files
-- `/Users/m.milde/Work/opencode-figma/` - Main package
-- `~/.config/opencode/plugins/` - OpenCode plugin installation (macOS/Linux)
-- `%APPDATA%\\opencode\\plugins\\` - OpenCode plugin installation (Windows)
-- `~/.opencode-figma/config.json` - Figma connection config
-
-### Key Features Implemented
-✅ Yolo Mode (CDP patching for macOS/Windows)
-✅ 10 OpenCode plugin tools
-✅ Standalone CLI (works without OpenCode)
-✅ Cross-platform support
-✅ Speed daemon for fast commands
-✅ AGENTS.md for OpenCode instructions
-
-## Support
-
-The plugin is based on [figma-cli](https://github.com/silships/figma-cli) by Sil Bormüller.
-Modified to work with OpenCode as a native plugin.
-
-For issues, check:
-- CLI: `opencode-figma --help`
-- OpenCode: Check if plugin loads in OpenCode session
-- Figma: Ensure Figma Desktop is running with a file open

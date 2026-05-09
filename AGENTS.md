@@ -12,8 +12,9 @@ Control Figma Desktop directly from OpenCode. Full read/write access via Yolo Mo
 | "add shadcn colors" | `node bin/opencode-figma tokens shadcn` |
 | "add tailwind colors" | `node bin/opencode-figma tokens tailwind` |
 | "show colors on canvas" | `node bin/opencode-figma tokens --action visualize` |
-| **"create a button / input / text field"** (reusable UI) | **OpenCode:** `figma_build` `kind=button` \| `kind=input` (best for agents), or `figma_recipe` `recipe=button` \| `recipe=input`. **Never** answer with Figma UI tutorials — always call a tool. **CLI:** `node bin/opencode-figma component create-set`. |
-| **"create a card / badge"** etc. | **`figma_component` create-set** or single `create` with JSX |
+| **"create a button / input / text field"** (reusable UI) | **OpenCode:** `figma_build` / `figma_recipe`. **Never** answer with Figma UI tutorials — always call a tool. **CLI:** `node bin/opencode-figma recipe button` \| `recipe input`. Custom variant sets: `node bin/opencode-figma component create-set --name MySet --variants-file variants.json` (validate JSON with `node bin/opencode-figma validate jsx-create-set -f variants.json`). |
+| **"notification / accordion / switch / checkbox / radio"** | **OpenCode:** `figma_build` / `figma_recipe` with `notification`, `accordion`, `switch` or `toggle`, `checkbox`, `radio` (alias: `radio button`). **CLI:** `node bin/opencode-figma recipe notification` (same pattern for accordion, switch, checkbox, radio). |
+| **"create a card / badge"** etc. | **`figma_component`** or **CLI:** `node bin/opencode-figma recipe card` \| `recipe badge` |
 | **"use the Button inside a Card"** | **`<Instance component="Button"/>` inside `node bin/opencode-figma render`** |
 | "create a one-off layout / hero / page" | `node bin/opencode-figma render '<JSX>'` |
 | "create a rectangle/frame" | `node bin/opencode-figma create frame "Name"` |
@@ -233,6 +234,7 @@ pl/pr/pt/pb={...}
 // Alignment
 justify="center"        // main axis: start | center | end | between
 items="center"          // cross axis: start | center | end
+absolute={true}         // ABSOLUTE positioning inside an auto-layout parent (overlays, e.g. radio dot on ring)
 wrap                    // boolean or wrap / nowrap — row wraps to next line
 rowGap={8}              // gap between wrapped rows (counterAxisSpacing); alias crossGap
 alignSelf="stretch"    // on child: start | center | end | stretch | baseline
@@ -272,7 +274,7 @@ opacity={0.9}
 
 ## Key Rules
 
-1. **Reusable UI = `figma_component` (+ `figma_recipe` for Button/Input).** Buttons/Inputs with states → prefer `figma_recipe recipe=button|input`, otherwise `create-set`. Anything used more than once goes through components — never duplicate masters ("Button 1", "Card 2", etc.).
+1. **Reusable UI = `figma_component` (+ `figma_recipe` for deterministic sets: Button, Input, Card, Badge, Hero, Notification, Accordion, Switch, Checkbox, Radio, …).** Buttons/Inputs with states → prefer `figma_recipe recipe=button|input`, otherwise `create-set`. Anything used more than once goes through components — never duplicate masters ("Button 1", "Card 2", etc.).
 2. **Layouts that consume components use `<Instance>`** in `figma_render` — not raw frames that look like the component.
 3. **One-off compositions** (a hero, a screen, a marketing section) → `figma_render`.
 4. **A single primitive** (just a frame, just a circle) → `figma_create`.

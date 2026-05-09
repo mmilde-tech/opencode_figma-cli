@@ -318,3 +318,371 @@ export function badgeRecipe({
   };
 }
 
+export function normalizeRecipePreset(p) {
+  return String(p || 'default').toLowerCase().trim() === 'compact' ? 'compact' : 'default';
+}
+
+/**
+ * Inline toast / banner alert — Type × tone strip + Title + Message text overrides.
+ */
+export function notificationRecipe({
+  /** When set, replaces every tone's accent strip color (hex or var:…). */
+  toneAccent,
+  toneBg,
+  toneBorder,
+  toneTitle,
+  toneBody,
+  infoAccent = '#3B82F6',
+  infoBg = '#EFF6FF',
+  infoBorder = '#BFDBFE',
+  infoTitle = '#1E3A8A',
+  infoBody = '#1E40AF',
+  successAccent = '#22C55E',
+  successBg = '#F0FDF4',
+  successBorder = '#BBF7D0',
+  successTitle = '#14532D',
+  successBody = '#166534',
+  warningAccent = '#F59E0B',
+  warningBg = '#FFFBEB',
+  warningBorder = '#FDE68A',
+  warningTitle = '#78350F',
+  warningBody = '#92400E',
+  errorAccent = '#EF4444',
+  errorBg = '#FEF2F2',
+  errorBorder = '#FECACA',
+  errorTitle = '#7F1D1D',
+  errorBody = '#991B1B'
+} = {}) {
+  const tones = [
+    {
+      Type: 'Info',
+      accent: toneAccent ?? infoAccent,
+      bg: toneBg ?? infoBg,
+      border: toneBorder ?? infoBorder,
+      title: toneTitle ?? infoTitle,
+      body: toneBody ?? infoBody
+    },
+    {
+      Type: 'Success',
+      accent: toneAccent ?? successAccent,
+      bg: toneBg ?? successBg,
+      border: toneBorder ?? successBorder,
+      title: toneTitle ?? successTitle,
+      body: toneBody ?? successBody
+    },
+    {
+      Type: 'Warning',
+      accent: toneAccent ?? warningAccent,
+      bg: toneBg ?? warningBg,
+      border: toneBorder ?? warningBorder,
+      title: toneTitle ?? warningTitle,
+      body: toneBody ?? warningBody
+    },
+    {
+      Type: 'Error',
+      accent: toneAccent ?? errorAccent,
+      bg: toneBg ?? errorBg,
+      border: toneBorder ?? errorBorder,
+      title: toneTitle ?? errorTitle,
+      body: toneBody ?? errorBody
+    }
+  ];
+  return {
+    name: 'Notification',
+    variants: tones.map((t) => ({
+      properties: { Type: t.Type },
+      jsx: `<Frame name="Notification" flex="row" gap={12} p={16} w={400} rounded={10} bg="${t.bg}" stroke="${t.border}" strokeWidth={1} items="start">
+  <Rect w={4} h={44} rounded={2} fill="${t.accent}" />
+  <Frame flex="col" gap={4} grow={1}>
+    <Text name="Title" size={14} weight="semibold" color="${t.title}">Notification title</Text>
+    <Text name="Message" size={13} color="${t.body}">Short supporting message goes here.</Text>
+  </Frame>
+</Frame>`
+    }))
+  };
+}
+
+/** Single accordion row — Collapsed vs Expanded (named Title + Body for overrides). */
+export function accordionRecipe({
+  stroke = '#E2E8F0',
+  titleColor = '#0F172A',
+  bodyColor = '#475569',
+  hintColor = '#64748B'
+} = {}) {
+  const collapsedBodyOpacity = 0;
+  const expandedBodyOpacity = 1;
+  return {
+    name: 'AccordionItem',
+    variants: [
+      {
+        properties: { State: 'Collapsed' },
+        jsx: `<Frame name="AccordionItem" flex="col" w={380} rounded={10} stroke="${stroke}" strokeWidth={1}>
+  <Frame flex="row" justify="between" items="center" px={16} py={14}>
+    <Text name="Title" size={15} weight="semibold" color="${titleColor}">Section title</Text>
+    <Text size={13} color="${hintColor}">▼</Text>
+  </Frame>
+  <Frame flex="col" px={16} pb={12} opacity={${collapsedBodyOpacity}}>
+    <Text name="Body" size={14} color="${bodyColor}">Supporting detail copy goes here and wraps naturally inside the accordion.</Text>
+  </Frame>
+</Frame>`
+      },
+      {
+        properties: { State: 'Expanded' },
+        jsx: `<Frame name="AccordionItem" flex="col" w={380} rounded={10} stroke="${stroke}" strokeWidth={1}>
+  <Frame flex="row" justify="between" items="center" px={16} py={14}>
+    <Text name="Title" size={15} weight="semibold" color="${titleColor}">Section title</Text>
+    <Text size={13} color="${hintColor}">▲</Text>
+  </Frame>
+  <Frame flex="col" px={16} pb={14} opacity={${expandedBodyOpacity}}>
+    <Text name="Body" size={14} color="${bodyColor}">Supporting detail copy goes here and wraps naturally inside the accordion.</Text>
+  </Frame>
+</Frame>`
+      }
+    ]
+  };
+}
+
+/** Toggle / switch track — Off vs On (Label text override). */
+export function switchRecipe({
+  trackOff = '#E5E7EB',
+  trackOn = '#7C3AED',
+  knobFill = '#FFFFFF',
+  labelColor = '#334155'
+} = {}) {
+  const knob = `<Rect w={20} h={20} rounded={999} fill="${knobFill}" />`;
+  return {
+    name: 'Switch',
+    variants: [
+      {
+        properties: { State: 'Off' },
+        jsx: `<Frame name="Switch" flex="row" items="center" gap={12}>
+  <Text name="Label" size={14} weight="medium" color="${labelColor}">Notifications</Text>
+  <Frame flex="row" w={44} h={24} rounded={12} bg="${trackOff}" items="center" pl={2} pr={2} justify="start">
+    ${knob}
+  </Frame>
+</Frame>`
+      },
+      {
+        properties: { State: 'On' },
+        jsx: `<Frame name="Switch" flex="row" items="center" gap={12}>
+  <Text name="Label" size={14} weight="medium" color="${labelColor}">Notifications</Text>
+  <Frame flex="row" w={44} h={24} rounded={12} bg="${trackOn}" items="center" pl={2} pr={2} justify="end">
+    ${knob}
+  </Frame>
+</Frame>`
+      }
+    ]
+  };
+}
+
+/**
+ * Checkbox — Checked × Disabled (4 variants). Named Label for instance overrides.
+ * Outer box uses flex row + nested flex wrappers so ✓ centers; renderer applies justify/items only when flex is set.
+ */
+export function checkboxRecipe({
+  borderVar = '#CBD5E1',
+  bgVar = '#FFFFFF',
+  primaryVar = '#7C3AED',
+  checkFg = '#FFFFFF',
+  labelColor = '#334155',
+  mutedBorder = '#E2E8F0',
+  mutedBg = '#F1F5F9',
+  labelMuted = '#94A3B8'
+} = {}) {
+  const variants = [];
+  for (const checked of ['No', 'Yes']) {
+    for (const disabled of ['No', 'Yes']) {
+      const isOn = checked === 'Yes';
+      const isDis = disabled === 'Yes';
+      const rowOp = isDis ? 0.5 : 1;
+      const boxBg = isOn ? primaryVar : isDis ? mutedBg : bgVar;
+      const boxStroke = isOn ? primaryVar : isDis ? mutedBorder : borderVar;
+      const strokeW = isOn ? 0 : 1;
+      const labelCol = isDis ? labelMuted : labelColor;
+      
+      let checkmark = '';
+      if (isOn) {
+        checkmark = `<Frame flex="row" w={18} h={18} justify="center" items="center">
+    <Frame flex="row" w={18} h={18} justify="center" items="center">
+      <Frame name="Checkmark" flex="row" justify="center" items="center">
+        <Text size={11} weight="bold" color="${checkFg}">✓</Text>
+      </Frame>
+    </Frame>
+  </Frame>`;
+      }
+
+      variants.push({
+        properties: { Checked: checked, Disabled: disabled },
+        jsx: `<Frame name="Checkbox" flex="row" items="center" gap={10} opacity={${rowOp}}>
+  <Frame flex="row" w={18} h={18} rounded={4} bg="${boxBg}" stroke="${boxStroke}" strokeWidth={${strokeW}} justify="center" items="center">
+    ${checkmark}
+  </Frame>
+  <Text name="Label" size={14} color="${labelCol}">Option label</Text>
+</Frame>`
+      });
+    }
+  }
+  return { name: 'Checkbox', variants };
+}
+
+/**
+ * Radio button — Selected × Disabled (4 variants).
+ * Outer ring (always visible) + inner dot (only when Selected=Yes).
+ * Container has NO flex layout so ring and dot overlap at same position.
+ * Dot is centered via nested flex Frame matching container size (18px).
+ */
+export function radioRecipe({
+  borderVar = '#CBD5E1',
+  bgVar = '#FFFFFF',
+  primaryVar = '#7C3AED',
+  labelColor = '#334155',
+  mutedBorder = '#E2E8F0',
+  labelMuted = '#94A3B8'
+} = {}) {
+  const variants = [];
+  for (const selected of ['No', 'Yes']) {
+    for (const disabled of ['No', 'Yes']) {
+      const isOn = selected === 'Yes';
+      const isDis = disabled === 'Yes';
+      const rowOp = isDis ? 0.5 : 1;
+      const ringStroke = isOn ? primaryVar : (isDis ? mutedBorder : borderVar);
+      const ringFill = bgVar;
+      const strokeW = 2;
+      const labelCol = isDis ? labelMuted : labelColor;
+      
+      let innerDot = '';
+      if (isOn) {
+        innerDot = `<Frame flex="row" w={18} h={18} justify="center" items="center">
+    <Ellipse w={8} h={8} fill="${primaryVar}" />
+  </Frame>`;
+      }
+
+      variants.push({
+        properties: { Selected: selected, Disabled: disabled },
+        jsx: `<Frame name="Radio" flex="row" items="center" gap={10} opacity={${rowOp}}>
+  <Frame w={18} h={18} rounded={999}>
+    <Ellipse w={18} h={18} fill="${ringFill}" stroke="${ringStroke}" strokeWidth={${strokeW}} />
+    ${innerDot}
+  </Frame>
+  <Text name="Label" size={14} color="${labelCol}">Option label</Text>
+</Frame>`
+      });
+    }
+  }
+  return { name: 'Radio', variants };
+}
+
+const BUILD_KIND_ALIASES = new Map([
+  ['text field', 'input'],
+  ['textfield', 'input'],
+  ['text-field', 'input'],
+  ['marketing hero', 'hero'],
+  ['marketing-hero', 'hero'],
+  ['toggle', 'switch'],
+  ['radio button', 'radio'],
+  ['radio-button', 'radio'],
+  ['radiobutton', 'radio'],
+  ['toast', 'notification'],
+  ['banner', 'notification'],
+  ['alert', 'notification'],
+  ['inline alert', 'notification'],
+  ['inline-alert', 'notification'],
+  ['collapsible', 'accordion'],
+  ['accordion item', 'accordion'],
+  ['accordion-item', 'accordion'],
+  ['accordionitem', 'accordion']
+]);
+
+/** Normalize figma_build / CLI kind tokens before resolving recipes. */
+export function normalizeBuildKind(kind) {
+  let k = String(kind || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+  const mapped = BUILD_KIND_ALIASES.get(k);
+  return mapped || k;
+}
+
+/**
+ * Returns { name, variants } for idempotent rebuild recipes.
+ * Token-apply and unknown keys yield null.
+ */
+export function getRecipeRebuildSpec(recipe, args = {}) {
+  const r = String(recipe || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+  const alias = BUILD_KIND_ALIASES.get(r);
+  const key = alias || r;
+  const preset = normalizeRecipePreset(args.preset);
+
+  if (key === 'input') {
+    return inputRecipe({
+      strokeVar: args.strokeVar,
+      bgVar: args.bgVar,
+      textVar: args.textVar,
+      preset
+    });
+  }
+  if (key === 'button') {
+    return buttonRecipe({
+      bgVar: args.buttonBgVar,
+      fgVar: args.buttonFgVar,
+      mutedBgVar: args.buttonMutedBgVar,
+      mutedFgVar: args.buttonMutedFgVar,
+      preset
+    });
+  }
+  if (key === 'card') return cardRecipe({});
+  if (key === 'badge') return badgeRecipe({});
+  if (key === 'hero') return heroRecipe({});
+  if (key === 'notification') {
+    return notificationRecipe({
+      toneAccent: args.notificationAccentVar,
+      toneBg: args.notificationBgVar,
+      toneBorder: args.notificationBorderVar,
+      toneTitle: args.notificationTitleVar,
+      toneBody: args.notificationBodyVar
+    });
+  }
+  if (key === 'accordion') {
+    return accordionRecipe({
+      stroke: args.accordionStrokeVar ?? args.strokeVar,
+      titleColor: args.accordionTitleVar ?? args.textVar,
+      bodyColor: args.accordionBodyVar,
+      hintColor: args.accordionHintVar
+    });
+  }
+  if (key === 'switch') {
+    return switchRecipe({
+      trackOff: args.switchTrackOffVar,
+      trackOn: args.switchTrackOnVar ?? args.buttonBgVar,
+      knobFill: args.switchKnobFillVar ?? args.buttonFgVar,
+      labelColor: args.switchLabelVar ?? args.textVar
+    });
+  }
+  if (key === 'checkbox' || key === 'checkboxes') {
+    return checkboxRecipe({
+      borderVar: args.checkboxBorderVar ?? args.strokeVar,
+      bgVar: args.checkboxBgVar ?? args.bgVar,
+      primaryVar: args.checkboxPrimaryVar ?? args.buttonBgVar,
+      checkFg: args.checkboxCheckFgVar ?? args.buttonFgVar,
+      mutedBorder: args.checkboxMutedBorderVar,
+      mutedBg: args.checkboxMutedBgVar ?? args.buttonMutedBgVar,
+      labelColor: args.checkboxLabelVar ?? args.textVar,
+      labelMuted: args.checkboxLabelMutedVar ?? args.buttonMutedFgVar
+    });
+  }
+  if (key === 'radio') {
+    return radioRecipe({
+      borderVar: args.radioBorderVar ?? args.strokeVar,
+      bgVar: args.radioBgVar ?? args.bgVar,
+      primaryVar: args.radioPrimaryVar ?? args.buttonBgVar,
+      mutedBorder: args.radioMutedBorderVar,
+      labelColor: args.radioLabelVar ?? args.textVar,
+      labelMuted: args.radioLabelMutedVar ?? args.buttonMutedFgVar
+    });
+  }
+  return null;
+}
+

@@ -1278,6 +1278,11 @@ const renderTree = async (tree, parent) => {
   }
   if (props.opacity != null) await _oc.applyScalarBinding(node, 'opacity', props.opacity);
 
+  const abs = props.absolute;
+  if ((abs === true || abs === '' || abs === 'true') && 'layoutPositioning' in node) {
+    node.layoutPositioning = 'ABSOLUTE';
+  }
+
   if (!isInstance && !TEXT_TAGS.has(t) && children) {
     for (const c of children) {
       if (typeof c === 'string') continue;

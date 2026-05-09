@@ -4,6 +4,13 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { RUNTIME } from './figma-runtime.js';
 import { getJSON } from './http.js';
+import {
+  dbgTargets,
+  dbgConnect,
+  dbgCdp,
+  dbgRetry,
+  safeCdpParams
+} from './cdp-logger.js';
 
 function getSavedCdpPort() {
   try {
@@ -46,7 +53,12 @@ export async function getCdpTargets(port, { timeout = 5000 } = {}) {
     pages = [];
   }
   if (!Array.isArray(pages)) pages = [];
-  if (pages.length > 0) return pages;
+  if (pages.length > 0) {
+    dbgTargets('GET /json → %d page target(s)', pages.length);
+    return pages;
+  }
+
+  dbgTargets('GET /json empty, trying Target.getTargets via browser websocket');
 
   let version;
   try {
@@ -83,6 +95,7 @@ export async function getCdpTargets(port, { timeout = 5000 } = {}) {
               url: t.url,
               webSocketDebuggerUrl: `ws://${host}:${port}/devtools/page/${t.targetId}`
             }));
+          dbgTargets('Target.getTargets → %d page target(s)', targets.length);
           finish(targets);
         }
       } catch {
@@ -101,8 +114,15 @@ export async function probeDesignSession(port, { timeout = 2000 } = {}) {
   try {
     const pages = await getCdpTargets(port, { timeout });
     const hasDesign = pages.some((p) => isDesignEditorUrl(p.url));
+    dbgTargets(
+      'probe port=%s designTab=%s (of %d targets)',
+      port,
+      hasDesign,
+      pages.length
+    );
     return { ok: hasDesign, pages };
   } catch {
+    dbgTargets('probe port=%s failed', port);
     return { ok: false, pages: null };
   }
 }
@@ -130,6 +150,7 @@ function clearConnectionMeta() {
 
 function rejectAllPending(reason) {
   const err = reason instanceof Error ? reason : new Error(String(reason));
+  dbgConnect('rejectAllPending (%d): %s', pendingMessages.size, err.message);
   for (const [, pending] of pendingMessages) {
     if (pending.timer) clearTimeout(pending.timer);
     pending.reject(err);
@@ -199,6 +220,13 @@ export class FigmaClient {
     const figmaPage = pages.find((p) => isDesignEditorUrl(p.url));
     if (!figmaPage) throw new Error('No Figma file open.');
 
+    dbgConnect(
+      'attach page id=%s title=%s url=%s…',
+      figmaPage.id,
+      figmaPage.title,
+      String(figmaPage.url || '').slice(0, 72)
+    );
+
     this.pageId = figmaPage.id;
     this.pageTitle = figmaPage.title;
     this.executionContextId = null;
@@ -213,6 +241,7 @@ export class FigmaClient {
       messageIdCounter = 0;
 
       const connectionTimeout = setTimeout(() => {
+        dbgConnect('connection timeout (15s) closing websocket');
         rejectAllPending(new Error('Connection timeout'));
         if (ws === newWs) ws = null;
         clearConnectionMeta();
@@ -223,6 +252,7 @@ export class FigmaClient {
       }, 15000);
 
       const fail = (err) => {
+        dbgConnect('connect failed: %s', err.message || String(err));
         clearTimeout(connectionTimeout);
         rejectAllPending(err);
         if (ws === newWs) ws = null;
@@ -242,19 +272,36 @@ export class FigmaClient {
           return;
         }
         if (response.method === 'Runtime.executionContextCreated') {
-          executionContexts.push(response.params.context);
+          const c = response.params?.context;
+          executionContexts.push(c);
+          dbgConnect(
+            'Runtime.executionContextCreated id=%s name=%s',
+            c?.id,
+            c?.name || ''
+          );
           return;
         }
         if (response.id != null && pendingMessages.has(response.id)) {
           const pending = pendingMessages.get(response.id);
           pendingMessages.delete(response.id);
           if (pending.timer) clearTimeout(pending.timer);
-          if (response.error) pending.reject(new Error(response.error.message));
-          else pending.resolve(response.result);
+          if (response.error) {
+            dbgCdp(
+              '← id=%s method=%s ERROR %o',
+              response.id,
+              pending.method || '?',
+              response.error
+            );
+            pending.reject(new Error(response.error.message));
+          } else {
+            dbgCdp('← id=%s method=%s ok', response.id, pending.method || '?');
+            pending.resolve(response.result);
+          }
         }
       });
 
       newWs.on('open', async () => {
+        dbgConnect('websocket open → Runtime.enable');
         try {
           await this.sendCommand('Runtime.enable');
 
@@ -288,6 +335,10 @@ export class FigmaClient {
             await new Promise((r) => setTimeout(r, attempt === 0 ? 400 : 200));
             if (await resolveExecutionContext()) {
               clearTimeout(connectionTimeout);
+              dbgConnect(
+                'Figma execution context ready executionContextId=%s',
+                this.executionContextId ?? 'default'
+              );
               connectionMeta = {
                 port: this.port,
                 pageId: this.pageId,
@@ -306,6 +357,7 @@ export class FigmaClient {
 
       newWs.on('error', (err) => fail(new Error('WebSocket failed: ' + err.message)));
       newWs.on('close', () => {
+        dbgConnect('websocket close');
         if (ws === newWs) ws = null;
       });
     });
@@ -318,14 +370,17 @@ export class FigmaClient {
     const id = ++messageIdCounter;
     const message = JSON.stringify({ id, method, params });
 
+    dbgCdp('→ id=%s method=%s %o', id, method, safeCdpParams(method, params));
+
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (pendingMessages.has(id)) {
           pendingMessages.delete(id);
+          dbgCdp('timeout id=%s method=%s (%dms)', id, method, this.commandTimeoutMs || 180000);
           reject(new Error('Command timeout'));
         }
       }, this.commandTimeoutMs || 180000);
-      pendingMessages.set(id, { resolve, reject, timer });
+      pendingMessages.set(id, { resolve, reject, timer, method });
       ws.send(message);
     });
   }
@@ -345,6 +400,8 @@ export class FigmaClient {
         msg.includes('Command timeout') ||
         msg.includes('Connection timeout');
       if (!transient) throw e;
+
+      dbgRetry('transient CDP error (%s), reconnect + retry Runtime.evaluate once', msg);
 
       // Drop shared session and retry once.
       try { this.close(); } catch {}
@@ -421,6 +478,7 @@ export class FigmaClient {
 
 /** Close module-level CDP socket without a FigmaClient instance (e.g. after failed handshake). */
 export function closeSharedFigmaTransport() {
+  dbgConnect('closeSharedFigmaTransport');
   try {
     rejectAllPending(new Error('Connection closed'));
   } catch {}

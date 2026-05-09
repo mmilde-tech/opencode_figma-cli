@@ -8,18 +8,13 @@ import { homedir } from 'os';
 import { FigmaClient, getConfiguredCdpPort, closeSharedFigmaTransport } from './core/figma-client.js';
 import { resolveNodeExecutable } from './core/node-exec.js';
 import * as ops from './core/operations.js';
-import { rebuildComponentSet, inputRecipe, buttonRecipe, cardRecipe, badgeRecipe, heroRecipe, applyTokens } from './core/recipes.js';
-import { validateComponentSet } from './core/validate.js';
+import { rebuildComponentSet, applyTokens, getRecipeRebuildSpec, normalizeBuildKind } from './core/recipes.js';
+import { validateComponentSet, validateCreateSetVariants } from './core/validate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = join(__dirname, '..', 'bin', 'opencode-figma');
 const SETTINGS_DIR = join(homedir(), '.opencode-figma');
 const SETTINGS_FILE = join(SETTINGS_DIR, 'settings.json');
-
-/** default | compact — only input/button recipes use this today. */
-function normalizeRecipePreset(p) {
-  return String(p || 'default').toLowerCase().trim() === 'compact' ? 'compact' : 'default';
-}
 
 /** Block models from answering with Figma tutorials instead of invoking tools (common GPT failure mode). */
 const FORBIDDEN_MANUAL_UI =
@@ -267,7 +262,7 @@ export const OpenCodeFigmaPlugin = async () => {
       if (!output.system) output.system = [];
       if (Array.isArray(output.system)) {
         output.system.push(
-          'opencode-figma: HARD RULE — If the user asks for an INPUT, BUTTON, or other UI in THEIR Figma file, you MUST call an automation tool (prefer figma_build kind=input|button, or figma_recipe recipe=input|button, or figma_component create-set) IN THE SAME TURN. It is NEVER correct to paste Figma manual instructions instead of invoking tools — that wastes the integration. Users use plain language only. First figma_* call auto-connects locally; only ask them to open a design file if connection fails. One-off screens/sections: figma_render.'
+          'opencode-figma: HARD RULE — If the user asks for an INPUT, BUTTON, CHECKBOX, RADIO, or other UI in THEIR Figma file, you MUST call an automation tool (prefer figma_build kind=input|button|checkbox|radio, or figma_recipe recipe=input|button|checkbox|radio, or figma_component create-set) IN THE SAME TURN. It is NEVER correct to paste Figma manual instructions instead of invoking tools — that wastes the integration. Users use plain language only. First figma_* call auto-connects locally; only ask them to open a design file if connection fails. One-off screens/sections: figma_render.'
         );
       }
     },
@@ -411,7 +406,7 @@ export const OpenCodeFigmaPlugin = async () => {
           '  • Instance — place an existing component or component set (component="Button", variant="State=Hover, Size=Lg", and any other prop becomes a text override matched by node name).',
           'Layout props (frames with flex/HStack/VStack): wrap + rowGap|crossGap (wrapped rows/columns), justify, items, gap, padding props as before.',
           'Child-in-stack props (apply inside auto-layout parent): grow (number or true=1), alignSelf (start|center|end|stretch|baseline), minW maxW minH maxH.',
-          'Props: name, w/h (number, or "fill"/"hug"), bg/fill, stroke/strokeWidth, rounded, opacity, flex ("row"/"col"), gap, p/px/py/pl/pr/pt/pb, justify ("start"/"center"/"end"/"between"), items, color (Text), size (Text), weight (Text).',
+          'Props: name, w/h (number, or "fill"/"hug"), bg/fill, stroke/strokeWidth, rounded, opacity, flex ("row"/"col"), gap, p/px/py/pl/pr/pt/pb, justify ("start"/"center"/"end"/"between"), items, absolute (true — ABSOLUTE positioning inside an auto-layout parent for overlays), color (Text), size (Text), weight (Text).',
           'Examples:',
           '  Toolbar: <HStack w={400} justify="between" items="center" gap={12} p={16}><Text>Logo</Text><Text>Menu</Text></HStack>',
           '  Fill remainder: <HStack w={480}><Text>Fixed</Text><Frame grow={1} bg="#EEE" h={40}/></HStack>',
@@ -465,6 +460,12 @@ export const OpenCodeFigmaPlugin = async () => {
             return `Created component "${r.name}" (${r.id}).`;
           }
           if (a === 'create-set' || a === 'createset' || a === 'set') {
+            const chk = validateCreateSetVariants(args.variants || []);
+            if (!chk.ok) {
+              throw new Error(
+                'create-set JSX validation failed:\n' + chk.issues.map((i) => `[${i.kind}] ${i.message}`).join('\n')
+              );
+            }
             const r = await ops.createComponentSet(c, args);
             return `Created component set "${r.name}" (${r.id}) with ${r.variants.length} variant(s):\n` +
               r.variants.map(v => `  ${v.name} (${v.id})`).join('\n');
@@ -813,44 +814,65 @@ export const OpenCodeFigmaPlugin = async () => {
           FORBIDDEN_MANUAL_UI,
           'Use when the user asks you to CREATE / BUILD UI in their file. One call = deterministic component set on canvas.',
           'Do not describe how THEY should click in Figma — you run this tool. Same automation as figma_recipe.',
-          'kind: input | button | card | badge | hero (aliases: text field → input; marketing hero → hero).',
+          'kind: input | button | card | badge | hero | notification | accordion | switch | toggle | checkbox | radio.',
+          'Aliases (normalizeBuildKind): text field→input; marketing hero→hero; radio button→radio; toast|banner|alert→notification; collapsible|accordion item→accordion; toggle→switch.',
+          'Shared optional colors (hex or var:name): strokeVar, bgVar, textVar, buttonBgVar, buttonFgVar, buttonMutedBgVar, buttonMutedFgVar — reused by accordion/checkbox/radio/switch where noted.',
+          'Recipe-specific optional vars: notificationAccentVar…notificationBodyVar; accordionStrokeVar…accordionHintVar; switchTrackOffVar…switchLabelVar; checkbox*Var; radio*Var.',
           'Optional preset=compact for input|button only (tighter spacing; default leaves current sizes).'
         ].join('\n'),
         args: {
-          kind: tool.schema.string().describe('input | button | card | badge | hero'),
-          preset: tool.schema.string().optional().describe('default | compact (input and button only)')
+          kind: tool.schema
+            .string()
+            .describe('input | button | card | badge | hero | notification | accordion | switch | toggle | checkbox | radio (+ aliases)'),
+          preset: tool.schema.string().optional().describe('default | compact (input and button only)'),
+          strokeVar: tool.schema.string().optional().describe('Input border; accordion border & checkbox/radio ring fallback'),
+          bgVar: tool.schema.string().optional().describe('Input fill; checkbox/radio face fallback'),
+          textVar: tool.schema.string().optional().describe('Input placeholder; accordion title / switch label / checkbox & radio label fallback'),
+          buttonBgVar: tool.schema.string().optional().describe('Button primary bg; switch on track & checkbox/radio primary fallback'),
+          buttonFgVar: tool.schema.string().optional().describe('Button primary fg; switch knob & checkbox check fallback'),
+          buttonMutedBgVar: tool.schema.string().optional().describe('Button disabled bg; checkbox muted fill fallback'),
+          buttonMutedFgVar: tool.schema.string().optional().describe('Button disabled fg; checkbox/radio muted label fallback'),
+          notificationAccentVar: tool.schema.string().optional().describe('Notification: accent strip for all types'),
+          notificationBgVar: tool.schema.string().optional().describe('Notification: background for all types'),
+          notificationBorderVar: tool.schema.string().optional().describe('Notification: border for all types'),
+          notificationTitleVar: tool.schema.string().optional().describe('Notification: title text for all types'),
+          notificationBodyVar: tool.schema.string().optional().describe('Notification: body text for all types'),
+          accordionStrokeVar: tool.schema.string().optional().describe('Accordion border (overrides strokeVar for accordion only)'),
+          accordionTitleVar: tool.schema.string().optional().describe('Accordion title color'),
+          accordionBodyVar: tool.schema.string().optional().describe('Accordion body text color'),
+          accordionHintVar: tool.schema.string().optional().describe('Accordion chevron hint color'),
+          switchTrackOffVar: tool.schema.string().optional().describe('Switch track when Off'),
+          switchTrackOnVar: tool.schema.string().optional().describe('Switch track when On (fallback: buttonBgVar)'),
+          switchKnobFillVar: tool.schema.string().optional().describe('Switch knob fill (fallback: buttonFgVar)'),
+          switchLabelVar: tool.schema.string().optional().describe('Switch label color (fallback: textVar)'),
+          checkboxPrimaryVar: tool.schema.string().optional().describe('Checkbox checked fill (fallback: buttonBgVar)'),
+          checkboxBorderVar: tool.schema.string().optional().describe('Checkbox unchecked border (fallback: strokeVar)'),
+          checkboxBgVar: tool.schema.string().optional().describe('Checkbox unchecked fill (fallback: bgVar)'),
+          checkboxCheckFgVar: tool.schema.string().optional().describe('Checkbox ✓ color (fallback: buttonFgVar)'),
+          checkboxMutedBorderVar: tool.schema.string().optional().describe('Checkbox disabled border'),
+          checkboxMutedBgVar: tool.schema.string().optional().describe('Checkbox disabled fill (fallback: buttonMutedBgVar)'),
+          checkboxLabelVar: tool.schema.string().optional().describe('Checkbox label (fallback: textVar)'),
+          checkboxLabelMutedVar: tool.schema.string().optional().describe('Checkbox disabled label (fallback: buttonMutedFgVar)'),
+          radioPrimaryVar: tool.schema.string().optional().describe('Radio selected fill (fallback: buttonBgVar)'),
+          radioBorderVar: tool.schema.string().optional().describe('Radio ring stroke (fallback: strokeVar)'),
+          radioBgVar: tool.schema.string().optional().describe('Radio unselected fill (fallback: bgVar)'),
+          radioMutedBorderVar: tool.schema.string().optional().describe('Radio disabled ring'),
+          radioLabelVar: tool.schema.string().optional().describe('Radio label (fallback: textVar)'),
+          radioLabelMutedVar: tool.schema.string().optional().describe('Radio disabled label (fallback: buttonMutedFgVar)')
         },
         execute: withErrorContext('figma_build', async (args) => {
           const c = await getClient();
-          const kind = String(args.kind || '')
-            .toLowerCase()
-            .trim()
-            .replace(/\s+/g, ' ');
-          const preset = normalizeRecipePreset(args.preset);
-          const isInput = kind === 'input' || kind === 'text field' || kind === 'textfield' || kind === 'text-field';
-          if (isInput) {
-            const r = await rebuildComponentSet(c, inputRecipe({ preset }));
-            return `Built Input set "${r.name}" (${r.id}) — ${r.variants.length} variants on canvas. Summarize that for the user; do not add manual Figma UI steps.`;
+          const kind = normalizeBuildKind(args.kind);
+          const spec = getRecipeRebuildSpec(kind, args);
+          if (!spec) {
+            throw new Error(
+              'figma_build: unknown kind — use input | button | card | badge | hero | notification | accordion | switch | toggle | checkbox | radio (got: ' +
+                String(args.kind || '') +
+                ')'
+            );
           }
-          if (kind === 'button') {
-            const r = await rebuildComponentSet(c, buttonRecipe({ preset }));
-            return `Built Button set "${r.name}" (${r.id}) — ${r.variants.length} variant(s). Summarize for the user; no manual steps.`;
-          }
-          if (kind === 'card') {
-            const r = await rebuildComponentSet(c, cardRecipe({}));
-            return `Built Card set "${r.name}" (${r.id}) — ${r.variants.length} variant(s).`;
-          }
-          if (kind === 'badge') {
-            const r = await rebuildComponentSet(c, badgeRecipe({}));
-            return `Built Badge set "${r.name}" (${r.id}) — ${r.variants.length} variant(s).`;
-          }
-          if (kind === 'hero' || kind === 'marketing hero' || kind === 'marketing-hero') {
-            const r = await rebuildComponentSet(c, heroRecipe({}));
-            return `Built Hero set "${r.name}" (${r.id}) — ${r.variants.length} variant(s).`;
-          }
-          throw new Error(
-            'figma_build: kind must be input | button | card | badge | hero (got: ' + kind + ')'
-          );
+          const r = await rebuildComponentSet(c, spec);
+          return `Built ${spec.name} set "${r.name}" (${r.id}) — ${r.variants.length} variant(s) on canvas. Summarize for the user; do not add manual Figma UI steps.`;
         })
       }),
 
@@ -867,82 +889,90 @@ export const OpenCodeFigmaPlugin = async () => {
           '  • "card" — Card component (Title, Description, Action text).',
           '  • "badge" — Badge set (Tone × Size, 4 variants).',
           '  • "hero" — Hero / marketing block (single layout variant, CTA row).',
+          '  • "notification" — Toast/banner (Type: Info/Success/Warning/Error). Optional notificationAccentVar/bgVar/borderVar/titleVar/bodyVar (apply to every tone).',
+          '  • "accordion" — AccordionItem. strokeVar or accordionStrokeVar; accordionTitleVar/bodyVar/hintVar; textVar fallbacks.',
+          '  • "switch" | "toggle" — Switch. switchTrackOffVar, switchTrackOnVar (or buttonBgVar), knob (buttonFgVar), label (textVar).',
+          '  • "checkbox" — Checked×Disabled. checkbox*Var or stroke/bg/button* fallbacks.',
+          '  • "radio" | "radio button" — Selected×Disabled. radio*Var or stroke/bg/button* fallbacks.',
           '  • "token-apply" — applies a token map to the selection (or nodeIds).',
           '',
           'action:',
           '  • "rebuild" (default) — deletes existing component set by name and recreates it deterministically.'
         ].join('\n'),
         args: {
-          recipe: tool.schema.string().describe('input | button | card | badge | hero | token-apply'),
+          recipe: tool.schema
+            .string()
+            .describe(
+              'input | button | card | badge | hero | notification | accordion | switch | toggle | checkbox | radio | token-apply'
+            ),
           action: tool.schema.string().optional().describe('rebuild (default)'),
           preset: tool.schema.string().optional().describe('default | compact (input and button only)'),
-          strokeVar: tool.schema.string().optional().describe('Input recipe: stroke (default hex #CBD5E1; or var:name)'),
-          bgVar: tool.schema.string().optional().describe('Input recipe: Default-state fill (default #FFFFFF; or var:name)'),
-          textVar: tool.schema.string().optional().describe('Input recipe: Default-state placeholder text fill (default #475569; or var:name)'),
-          buttonBgVar: tool.schema.string().optional().describe('Button bg (default #7C3AED or override)'),
-          buttonFgVar: tool.schema.string().optional().describe('Button fg'),
-          buttonMutedBgVar: tool.schema.string().optional().describe('Disabled bg'),
-          buttonMutedFgVar: tool.schema.string().optional().describe('Disabled fg'),
+          strokeVar: tool.schema.string().optional().describe('Input border; accordion/checkbox/radio fallbacks (see figma_build)'),
+          bgVar: tool.schema.string().optional().describe('Input fill; checkbox/radio fallbacks'),
+          textVar: tool.schema.string().optional().describe('Input placeholder; accordion/switch/checkbox/radio label fallbacks'),
+          buttonBgVar: tool.schema.string().optional().describe('Button bg; switch on & checkbox/radio primary fallbacks'),
+          buttonFgVar: tool.schema.string().optional().describe('Button fg; switch knob & checkbox check fallbacks'),
+          buttonMutedBgVar: tool.schema.string().optional().describe('Disabled bg; checkbox muted fill fallback'),
+          buttonMutedFgVar: tool.schema.string().optional().describe('Disabled fg; checkbox/radio muted label fallback'),
+          notificationAccentVar: tool.schema.string().optional(),
+          notificationBgVar: tool.schema.string().optional(),
+          notificationBorderVar: tool.schema.string().optional(),
+          notificationTitleVar: tool.schema.string().optional(),
+          notificationBodyVar: tool.schema.string().optional(),
+          accordionStrokeVar: tool.schema.string().optional(),
+          accordionTitleVar: tool.schema.string().optional(),
+          accordionBodyVar: tool.schema.string().optional(),
+          accordionHintVar: tool.schema.string().optional(),
+          switchTrackOffVar: tool.schema.string().optional(),
+          switchTrackOnVar: tool.schema.string().optional(),
+          switchKnobFillVar: tool.schema.string().optional(),
+          switchLabelVar: tool.schema.string().optional(),
+          checkboxPrimaryVar: tool.schema.string().optional(),
+          checkboxBorderVar: tool.schema.string().optional(),
+          checkboxBgVar: tool.schema.string().optional(),
+          checkboxCheckFgVar: tool.schema.string().optional(),
+          checkboxMutedBorderVar: tool.schema.string().optional(),
+          checkboxMutedBgVar: tool.schema.string().optional(),
+          checkboxLabelVar: tool.schema.string().optional(),
+          checkboxLabelMutedVar: tool.schema.string().optional(),
+          radioPrimaryVar: tool.schema.string().optional(),
+          radioBorderVar: tool.schema.string().optional(),
+          radioBgVar: tool.schema.string().optional(),
+          radioMutedBorderVar: tool.schema.string().optional(),
+          radioLabelVar: tool.schema.string().optional(),
+          radioLabelMutedVar: tool.schema.string().optional(),
           nodeIds: tool.schema.array(tool.schema.string()).optional().describe('For token-apply: explicit target node ids (defaults to current selection)'),
           tokens: tool.schema.object({}).optional().describe('For token-apply: token map (fill/bg/stroke/text, radius, gap, padding, opacity, fontSize, deep=true to recurse)')
         },
         execute: withErrorContext('figma_recipe', async (args) => {
           const c = await getClient();
-          const recipe = String(args.recipe || '').toLowerCase();
+          const recipeLc = String(args.recipe || '')
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, ' ');
+          const recipe = normalizeBuildKind(args.recipe || '');
           const action = String(args.action || 'rebuild').toLowerCase();
-          const preset = normalizeRecipePreset(args.preset);
 
-          if (recipe === 'input') {
-            const spec = inputRecipe({
-              strokeVar: args.strokeVar,
-              bgVar: args.bgVar,
-              textVar: args.textVar,
-              preset
-            });
-            if (action !== 'rebuild') throw new Error('Unsupported action for input: ' + action);
-            const r = await rebuildComponentSet(c, spec);
-            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
-          }
-          if (recipe === 'button') {
-            const spec = buttonRecipe({
-              bgVar: args.buttonBgVar,
-              fgVar: args.buttonFgVar,
-              mutedBgVar: args.buttonMutedBgVar,
-              mutedFgVar: args.buttonMutedFgVar,
-              preset
-            });
-            if (action !== 'rebuild') throw new Error('Unsupported action for button: ' + action);
-            const r = await rebuildComponentSet(c, spec);
-            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
-          }
-          if (recipe === 'card') {
-            if (action !== 'rebuild') throw new Error('Unsupported action for card: ' + action);
-            const r = await rebuildComponentSet(c, cardRecipe({}));
-            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
-          }
-          if (recipe === 'badge') {
-            if (action !== 'rebuild') throw new Error('Unsupported action for badge: ' + action);
-            const r = await rebuildComponentSet(c, badgeRecipe({}));
-            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
-          }
-          if (recipe === 'hero') {
-            if (action !== 'rebuild') throw new Error('Unsupported action for hero: ' + action);
-            const r = await rebuildComponentSet(c, heroRecipe({}));
-            return `Recipe "${recipe}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
-          }
-          if (recipe === 'token-apply' || recipe === 'tokens' || recipe === 'apply-tokens') {
+          if (recipeLc === 'token-apply' || recipeLc === 'tokens' || recipeLc === 'apply-tokens') {
             await requireTarget({ nodeIds: args.nodeIds, allowMulti: true });
             const r = await applyTokens(c, { nodeIds: args.nodeIds, tokens: args.tokens || {} });
             const changed = Array.isArray(r.changed) ? r.changed.length : 0;
-            return `Recipe "${recipe}" complete: updated ${changed} node(s) (from ${r.selected} selected).`;
+            return `Recipe "${recipeLc}" complete: updated ${changed} node(s) (from ${r.selected} selected).`;
           }
-          throw new Error('Unknown recipe: ' + args.recipe);
+
+          if (action !== 'rebuild') throw new Error('Unsupported recipe action: ' + action + ' (use rebuild)');
+
+          const spec = getRecipeRebuildSpec(recipe, args);
+          if (!spec) throw new Error('Unknown recipe: ' + args.recipe);
+
+          const r = await rebuildComponentSet(c, spec);
+          return `Recipe "${recipeLc}" complete: rebuilt component set "${r.name}" with ${r.variants.length} variant(s).`;
         })
       }),
 
       figma_validate: tool({
         description:
-          'Validate a component set structure and variant completeness. Use after figma_recipe / figma_build for Input, Button, Card, Badge, Hero, etc. Returns actionable issues.',
+          'Validate a component set structure and variant completeness in Figma. Use after figma_recipe / figma_build for Input, Button, Card, Badge, Hero, Notification, Accordion, Switch, Checkbox, Radio, etc. Returns actionable issues.',
         args: {
           type: tool.schema.string().describe('Validation type: component-set'),
           name: tool.schema.string().describe('Component set name to validate (e.g. Input)')

@@ -184,6 +184,84 @@ program
     await nodeCommand(action, args, options);
   });
 
+// ============ COMPONENT ============
+program
+  .command('component <action>')
+  .description('Components: list | create | create-set | instance | delete')
+  .option('-n, --name <string>', 'Component or set name (create / create-set)')
+  .option('--jsx <string>', 'Inline JSX (create)')
+  .option('--jsx-file <path>', 'Read JSX from file or use - for stdin')
+  .option('--variants <json>', 'JSON array of { properties?, jsx } (create-set)')
+  .option('--variants-file <path>', 'Read variants JSON from file or - for stdin')
+  .option('--component <name>', 'Component name or id (instance)')
+  .option('--variant <spec>', 'Variant spec e.g. State=Default, Size=Md (instance)')
+  .option('--overrides <json>', 'JSON override map (instance)')
+  .option('--overrides-file <path>', 'Read overrides JSON from file')
+  .option('--ids <ids>', 'Comma-separated node ids (delete); omit to use selection')
+  .action(async (action, options) => {
+    const { default: componentCommand } = await import('../src/cli/component.js');
+    await componentCommand(action, options);
+  });
+
+// ============ RECIPE ============
+program
+  .command('recipe <name>')
+  .description(
+    'Deterministic rebuild: input, button, card, badge, hero, notification, accordion, switch | toggle, checkbox, radio, token-apply'
+  )
+  .option('--preset <mode>', 'default | compact (input and button)')
+  .option('--stroke-var <v>', 'Input stroke color / var')
+  .option('--bg-var <v>', 'Input default fill')
+  .option('--text-var <v>', 'Input placeholder text color')
+  .option('--button-bg <v>', 'Button primary bg')
+  .option('--button-fg <v>', 'Button primary fg')
+  .option('--button-muted-bg <v>', 'Button disabled bg')
+  .option('--button-muted-fg <v>', 'Button disabled fg')
+  .option('--notification-accent <v>', 'Notification: accent strip (all tones)')
+  .option('--notification-bg <v>', 'Notification: background (all tones)')
+  .option('--notification-border <v>', 'Notification: border (all tones)')
+  .option('--notification-title <v>', 'Notification: title text color (all tones)')
+  .option('--notification-body <v>', 'Notification: body text color (all tones)')
+  .option('--accordion-stroke <v>', 'Accordion border (or use --stroke-var)')
+  .option('--accordion-title <v>', 'Accordion title color')
+  .option('--accordion-body <v>', 'Accordion body color')
+  .option('--accordion-hint <v>', 'Accordion chevron hint color')
+  .option('--switch-track-off <v>', 'Switch track when Off')
+  .option('--switch-track-on <v>', 'Switch track when On')
+  .option('--switch-knob <v>', 'Switch knob fill')
+  .option('--switch-label <v>', 'Switch label color')
+  .option('--checkbox-primary <v>', 'Checkbox checked fill')
+  .option('--checkbox-border <v>', 'Checkbox unchecked border')
+  .option('--checkbox-bg <v>', 'Checkbox unchecked fill')
+  .option('--checkbox-check-fg <v>', 'Checkbox checkmark color')
+  .option('--checkbox-muted-border <v>', 'Checkbox disabled border')
+  .option('--checkbox-muted-bg <v>', 'Checkbox disabled fill')
+  .option('--checkbox-label <v>', 'Checkbox label color')
+  .option('--checkbox-label-muted <v>', 'Checkbox disabled label')
+  .option('--radio-primary <v>', 'Radio selected fill')
+  .option('--radio-border <v>', 'Radio ring stroke')
+  .option('--radio-bg <v>', 'Radio unselected fill')
+  .option('--radio-muted-border <v>', 'Radio disabled ring')
+  .option('--radio-label <v>', 'Radio label color')
+  .option('--radio-label-muted <v>', 'Radio disabled label')
+  .option('--tokens <json>', 'token-apply: JSON token map')
+  .option('--tokens-file <path>', 'token-apply: read JSON from file or stdin (-)')
+  .option('--node-ids <ids>', 'token-apply: comma-separated target ids (default: selection)')
+  .action(async (name, options) => {
+    const { default: recipeCommand } = await import('../src/cli/recipe.js');
+    await recipeCommand(name, options);
+  });
+
+// ============ VALIDATE (offline) ============
+program
+  .command('validate <type>')
+  .description('Offline checks: jsx-create-set — validate variants JSON before component create-set')
+  .option('-f, --file <path>', 'Input file (JSON array); default stdin')
+  .action(async (type, options) => {
+    const { default: validateCommand } = await import('../src/cli/validate-cli.js');
+    await validateCommand(type, options);
+  });
+
 // ============ COLLECTION ============
 program
   .command('collection <action> [name]')
