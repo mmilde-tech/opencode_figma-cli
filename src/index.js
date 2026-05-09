@@ -262,7 +262,25 @@ export const OpenCodeFigmaPlugin = async () => {
       if (!output.system) output.system = [];
       if (Array.isArray(output.system)) {
         output.system.push(
-          'opencode-figma: HARD RULE — If the user asks for an INPUT, BUTTON, CHECKBOX, RADIO, or other UI in THEIR Figma file, you MUST call an automation tool (prefer figma_build kind=input|button|checkbox|radio, or figma_recipe recipe=input|button|checkbox|radio, or figma_component create-set) IN THE SAME TURN. It is NEVER correct to paste Figma manual instructions instead of invoking tools — that wastes the integration. Users use plain language only. First figma_* call auto-connects locally; only ask them to open a design file if connection fails. One-off screens/sections: figma_render.'
+          'opencode-figma: HARD RULE — If the user asks for UI in THEIR Figma file, you MUST call an automation tool IN THE SAME TURN. It is NEVER correct to paste Figma manual instructions instead of invoking tools — that wastes the integration. Users use plain language only. First figma_* call auto-connects locally; only ask them to open a design file if connection fails.'
+        );
+        output.system.push(
+          'opencode-figma: REUSABLE UI = figma_recipe or figma_component. Available recipes (preferred): button (5 variants: Primary/Secondary/Outline/Ghost/Destructive), input (7 states), card, badge, hero, notification (4 tones: Info/Success/Warning/Error), accordion (2 states: Default/Open), switch (toggle, 2 states: Off/On), checkbox (4 states: Default/Hover/Active/Disabled), radio (4 states), modal (3 variants). Use figma_recipe recipe=name to create component sets with deterministic structure and variable bindings. For custom component sets, use figma_component with action="create-set" + variants array.'
+        );
+        output.system.push(
+          'opencode-figma: LAYOUTS = figma_render with JSX. Consume components via <Instance component="Button" variant="State=Hover" Label="Click me"/> — props like Label/Title/Action match text node names inside components and auto-override them (nested instances work too). JSX tags: Frame, VStack/HStack, Text, H1-H4, Label, Rect, Ellipse, Instance. Props: flex="row|col", gap, p/px/py, justify, items, w/h="fill|hug|{number}", bg, stroke, strokeWidth, rounded, opacity, size, weight, color, font. Use w="fill" for elements that should stretch to container width.'
+        );
+        output.system.push(
+          'opencode-figma: VARIABLE BINDINGS — Use var:name syntax. COLORS: bg="var:card", stroke="var:border", color="var:foreground". FLOATS (spacing, radius, opacity, fontSize, strokeWidth, gap, padding): Use var:collection/name format — works with set command and JSX props (gap, p, px, py, rounded, strokeWidth, opacity, size). Collection name comes first: "var:semantic/component/button/padding-x". Components have semantic variables: button/*, card/*, component/input/*, component/notification/*, component/accordion/*, component/switch/*, component/checkbox/*, component/radio/*, component/modal/*.'
+        );
+        output.system.push(
+          'opencode-figma: TEXT STYLES — When available in the Figma file, prefer using Figma text styles over raw font properties. Common styles: Body (14px Regular), Body/Sm (14px Medium), Caption (12px Regular), Heading/H1, Heading/H2, Heading/H3. Use var:typography/body/font-size for fontSize, var:typography/body/font-weight for fontWeight when binding to semantic variables.'
+        );
+        output.system.push(
+          'opencode-figma: ONE-OFF CREATION = figma_create (frame, text, rect, ellipse, icon). Use var:name for fill/stroke. Convert to component with action="to-component". PRIMITIVES ONLY — never create reusable UI this way.'
+        );
+        output.system.push(
+          'opencode-figma: KEY PATTERNS: (1) Reusable elements → figma_recipe or figma_component create-set (never duplicate "Button 1", "Button 2"). (2) Layouts consuming components → figma_render with <Instance>. (3) One-off screens/sections → figma_render. (4) Single primitive → figma_create. (5) Name text nodes inside components (name="Title", name="Label", name="Action") so <Instance Title="..."/> works. (6) For checkbox/radio alignment: Use triple-nested flex="row" justify="center" items="center" wrappers for pixel-perfect centering. (7) Radio button dot overlay: Use absolute={true} on the dot inside the ring — flex="row" on parent causes horizontal layout issues. (8) Figma JSX only applies justify/items when flex is explicitly set. (9) Modal backdrop opacity: Use numeric value (0.5) directly, not var: syntax for opacity on backdrop.'
         );
       }
     },

@@ -6,6 +6,26 @@
 
 import { parseJSX, createComponentSet, listComponents, deleteNodes } from './operations.js';
 
+function formatSizeProp(size) {
+  if (typeof size === 'string' && size.startsWith('var:')) {
+    return `size="${size}"`;
+  }
+  if (typeof size === 'number') {
+    return `size={${size}}`;
+  }
+  return '';
+}
+
+function formatNumProp(propName, val) {
+  if (typeof val === 'string' && val.startsWith('var:')) {
+    return `${propName}="${val}"`;
+  }
+  if (typeof val === 'number') {
+    return `${propName}={${val}}`;
+  }
+  return '';
+}
+
 /**
  * Rebuild a component set by name (delete existing + recreate).
  * This is the simplest idempotent strategy that avoids drift.
@@ -333,26 +353,42 @@ export function notificationRecipe({
   toneTitle,
   toneBody,
   infoAccent = '#3B82F6',
-  infoBg = '#EFF6FF',
-  infoBorder = '#BFDBFE',
-  infoTitle = '#1E3A8A',
-  infoBody = '#1E40AF',
+  infoBg = 'var:notification/bg',
+  infoBorder = 'var:notification/border',
+  infoTitle = 'var:notification/fg',
+  infoBody = 'var:notification/muted',
   successAccent = '#22C55E',
-  successBg = '#F0FDF4',
-  successBorder = '#BBF7D0',
-  successTitle = '#14532D',
-  successBody = '#166534',
+  successBg = 'var:notification/bg',
+  successBorder = 'var:notification/border',
+  successTitle = 'var:notification/fg',
+  successBody = 'var:notification/muted',
   warningAccent = '#F59E0B',
-  warningBg = '#FFFBEB',
-  warningBorder = '#FDE68A',
-  warningTitle = '#78350F',
-  warningBody = '#92400E',
+  warningBg = 'var:notification/bg',
+  warningBorder = 'var:notification/border',
+  warningTitle = 'var:notification/fg',
+  warningBody = 'var:notification/muted',
   errorAccent = '#EF4444',
-  errorBg = '#FEF2F2',
-  errorBorder = '#FECACA',
-  errorTitle = '#7F1D1D',
-  errorBody = '#991B1B'
+  errorBg = 'var:notification/bg',
+  errorBorder = 'var:notification/border',
+  errorTitle = 'var:notification/fg',
+  errorBody = 'var:notification/muted',
+  titleFontSize = 'var:notification/font-size/title',
+  bodyFontSize = 'var:notification/font-size/body',
+  radius = 'var:notification/radius',
+  paddingX = 'var:notification/padding/x',
+  paddingY = 'var:notification/padding/y',
+  gap = 'var:notification/gap',
+  strokeWeight = 'var:notification/stroke-weight'
 } = {}) {
+  const titleSizeJsx = formatSizeProp(titleFontSize);
+  const bodySizeJsx = formatSizeProp(bodyFontSize);
+  const radiusJsx = formatNumProp('rounded', radius);
+  const pxJsx = formatNumProp('px', paddingX);
+  const pyJsx = formatNumProp('py', paddingY);
+  const pJsx = formatNumProp('p', paddingX);
+  const gapJsx = formatNumProp('gap', gap);
+  const swJsx = formatNumProp('strokeWidth', strokeWeight);
+  
   const tones = [
     {
       Type: 'Info',
@@ -391,12 +427,12 @@ export function notificationRecipe({
     name: 'Notification',
     variants: tones.map((t) => ({
       properties: { Type: t.Type },
-      jsx: `<Frame name="Notification" flex="row" gap={12} p={16} w={400} rounded={10} bg="${t.bg}" stroke="${t.border}" strokeWidth={1} items="start">
+      jsx: `<Frame name="Notification" flex="row" ${gapJsx} p={16} w={400} ${radiusJsx} bg="${t.bg}" stroke="${t.border}" ${swJsx} items="start">
   <Rect w={4} h={44} rounded={2} fill="${t.accent}" />
   <Frame flex="col" gap={4} grow={1}>
-    <Text name="Title" size={14} weight="semibold" color="${t.title}">Notification title</Text>
-    <Text name="Message" size={13} color="${t.body}">Short supporting message goes here.</Text>
-  </Frame>
+    <Text name="Title" ${titleSizeJsx} weight="semibold" color="${t.title}">Notification title</Text>
+    <Text name="Message" ${bodySizeJsx} color="${t.body}">Short supporting message goes here.</Text>
+   </Frame>
 </Frame>`
     }))
   };
@@ -404,37 +440,55 @@ export function notificationRecipe({
 
 /** Single accordion row — Collapsed vs Expanded (named Title + Body for overrides). */
 export function accordionRecipe({
-  stroke = '#E2E8F0',
-  titleColor = '#0F172A',
-  bodyColor = '#475569',
-  hintColor = '#64748B'
+  bg = 'var:accordion/bg',
+  stroke = 'var:accordion/border',
+  titleColor = 'var:accordion/fg',
+  bodyColor = 'var:accordion/muted',
+  hintColor = 'var:accordion/hint',
+  titleFontSize = 'var:accordion/font-size/title',
+  bodyFontSize = 'var:accordion/font-size/body',
+  hintFontSize = 'var:accordion/font-size/hint',
+  radius = 'var:accordion/radius',
+  paddingX = 'var:accordion/padding/x',
+  paddingY = 'var:accordion/padding/y',
+  gap = 'var:accordion/gap',
+  strokeWeight = 'var:accordion/stroke-weight'
 } = {}) {
-  const collapsedBodyOpacity = 0;
-  const expandedBodyOpacity = 1;
+  const bgJsx = bg && bg !== 'transparent' && bg !== 'none'
+    ? `bg="${bg}"`
+    : '';
+  const titleSizeJsx = formatSizeProp(titleFontSize);
+  const bodySizeJsx = formatSizeProp(bodyFontSize);
+  const hintSizeJsx = formatSizeProp(hintFontSize);
+  const radiusJsx = formatNumProp('rounded', radius);
+  const pxJsx = formatNumProp('px', paddingX);
+  const pyJsx = formatNumProp('py', paddingY);
+  const swJsx = formatNumProp('strokeWidth', strokeWeight);
+  
   return {
     name: 'AccordionItem',
     variants: [
       {
         properties: { State: 'Collapsed' },
-        jsx: `<Frame name="AccordionItem" flex="col" w={380} rounded={10} stroke="${stroke}" strokeWidth={1}>
-  <Frame flex="row" justify="between" items="center" px={16} py={14}>
-    <Text name="Title" size={15} weight="semibold" color="${titleColor}">Section title</Text>
-    <Text size={13} color="${hintColor}">▼</Text>
+        jsx: `<Frame name="AccordionItem" flex="col" w={380} ${radiusJsx} ${bgJsx} stroke="${stroke}" ${swJsx}>
+  <Frame flex="row" w="fill" justify="between" items="center" ${pxJsx} ${pyJsx}>
+    <Text name="Title" w="fill" ${titleSizeJsx} weight="semibold" color="${titleColor}">Section title</Text>
+    <Text ${hintSizeJsx} color="${hintColor}">▼</Text>
   </Frame>
-  <Frame flex="col" px={16} pb={12} opacity={${collapsedBodyOpacity}}>
-    <Text name="Body" size={14} color="${bodyColor}">Supporting detail copy goes here and wraps naturally inside the accordion.</Text>
+  <Frame flex="col" w="fill" ${pxJsx} pb={12} opacity={0}>
+    <Text name="Body" w="fill" ${bodySizeJsx} color="${bodyColor}">Supporting detail copy goes here and wraps naturally inside the accordion.</Text>
   </Frame>
 </Frame>`
       },
       {
         properties: { State: 'Expanded' },
-        jsx: `<Frame name="AccordionItem" flex="col" w={380} rounded={10} stroke="${stroke}" strokeWidth={1}>
-  <Frame flex="row" justify="between" items="center" px={16} py={14}>
-    <Text name="Title" size={15} weight="semibold" color="${titleColor}">Section title</Text>
-    <Text size={13} color="${hintColor}">▲</Text>
+        jsx: `<Frame name="AccordionItem" flex="col" w={380} ${radiusJsx} ${bgJsx} stroke="${stroke}" ${swJsx}>
+  <Frame flex="row" w="fill" justify="between" items="center" ${pxJsx} ${pyJsx}>
+    <Text name="Title" w="fill" ${titleSizeJsx} weight="semibold" color="${titleColor}">Section title</Text>
+    <Text ${hintSizeJsx} color="${hintColor}">▲</Text>
   </Frame>
-  <Frame flex="col" px={16} pb={14} opacity={${expandedBodyOpacity}}>
-    <Text name="Body" size={14} color="${bodyColor}">Supporting detail copy goes here and wraps naturally inside the accordion.</Text>
+  <Frame flex="col" w="fill" ${pxJsx} ${pyJsx} opacity={1}>
+    <Text name="Body" w="fill" ${bodySizeJsx} color="${bodyColor}">Supporting detail copy goes here and wraps naturally inside the accordion.</Text>
   </Frame>
 </Frame>`
       }
@@ -444,29 +498,43 @@ export function accordionRecipe({
 
 /** Toggle / switch track — Off vs On (Label text override). */
 export function switchRecipe({
-  trackOff = '#E5E7EB',
-  trackOn = '#7C3AED',
-  knobFill = '#FFFFFF',
-  labelColor = '#334155'
+  trackOff = 'var:switch/track/off',
+  trackOn = 'var:switch/track/on',
+  knobFill = 'var:switch/knob',
+  labelColor = 'var:switch/label',
+  labelFontSize = 'var:switch/font-size/label',
+  radius = 'var:switch/radius',
+  gap = 'var:switch/gap',
+  trackWidth = 'var:switch/track/width',
+  trackHeight = 'var:switch/track/height',
+  knobSize = 'var:switch/knob/size'
 } = {}) {
-  const knob = `<Rect w={20} h={20} rounded={999} fill="${knobFill}" />`;
+  const labelSizeJsx = formatSizeProp(labelFontSize);
+  const radiusJsx = formatNumProp('rounded', radius);
+  const gapJsx = formatNumProp('gap', gap);
+  const wJsx = formatNumProp('w', trackWidth);
+  const hJsx = formatNumProp('h', trackHeight);
+  const kwJsx = formatNumProp('w', knobSize);
+  const khJsx = formatNumProp('h', knobSize);
+  
+  const knob = `<Rect ${kwJsx} ${khJsx} rounded={999} fill="${knobFill}" />`;
   return {
     name: 'Switch',
     variants: [
       {
         properties: { State: 'Off' },
-        jsx: `<Frame name="Switch" flex="row" items="center" gap={12}>
-  <Text name="Label" size={14} weight="medium" color="${labelColor}">Notifications</Text>
-  <Frame flex="row" w={44} h={24} rounded={12} bg="${trackOff}" items="center" pl={2} pr={2} justify="start">
+        jsx: `<Frame name="Switch" flex="row" items="center" ${gapJsx}>
+  <Text name="Label" ${labelSizeJsx} weight="medium" color="${labelColor}">Notifications</Text>
+  <Frame flex="row" ${wJsx} ${hJsx} ${radiusJsx} bg="${trackOff}" items="center" pl={2} pr={2} justify="start">
     ${knob}
   </Frame>
 </Frame>`
       },
       {
         properties: { State: 'On' },
-        jsx: `<Frame name="Switch" flex="row" items="center" gap={12}>
-  <Text name="Label" size={14} weight="medium" color="${labelColor}">Notifications</Text>
-  <Frame flex="row" w={44} h={24} rounded={12} bg="${trackOn}" items="center" pl={2} pr={2} justify="end">
+        jsx: `<Frame name="Switch" flex="row" items="center" ${gapJsx}>
+  <Text name="Label" ${labelSizeJsx} weight="medium" color="${labelColor}">Notifications</Text>
+  <Frame flex="row" ${wJsx} ${hJsx} ${radiusJsx} bg="${trackOn}" items="center" pl={2} pr={2} justify="end">
     ${knob}
   </Frame>
 </Frame>`
@@ -480,15 +548,29 @@ export function switchRecipe({
  * Outer box uses flex row + nested flex wrappers so ✓ centers; renderer applies justify/items only when flex is set.
  */
 export function checkboxRecipe({
-  borderVar = '#CBD5E1',
-  bgVar = '#FFFFFF',
-  primaryVar = '#7C3AED',
-  checkFg = '#FFFFFF',
-  labelColor = '#334155',
-  mutedBorder = '#E2E8F0',
-  mutedBg = '#F1F5F9',
-  labelMuted = '#94A3B8'
+  borderVar = 'var:checkbox/border',
+  bgVar = 'var:checkbox/bg',
+  primaryVar = 'var:checkbox/primary',
+  checkFg = 'var:checkbox/check-fg',
+  labelColor = 'var:checkbox/fg',
+  mutedBorder = 'var:checkbox/muted/border',
+  mutedBg = 'var:checkbox/muted/bg',
+  labelMuted = 'var:checkbox/muted/fg',
+  labelFontSize = 'var:checkbox/font-size/label',
+  checkFontSize = 'var:checkbox/font-size/check',
+  radius = 'var:checkbox/radius',
+  size = 'var:checkbox/size',
+  gap = 'var:checkbox/gap',
+  strokeWeight = 'var:checkbox/stroke-weight'
 } = {}) {
+  const labelSizeJsx = formatSizeProp(labelFontSize);
+  const checkSizeJsx = formatSizeProp(checkFontSize);
+  const radiusJsx = formatNumProp('rounded', radius);
+  const wJsx = formatNumProp('w', size);
+  const hJsx = formatNumProp('h', size);
+  const gapJsx = formatNumProp('gap', gap);
+  const swJsx = formatNumProp('strokeWidth', strokeWeight);
+  
   const variants = [];
   for (const checked of ['No', 'Yes']) {
     for (const disabled of ['No', 'Yes']) {
@@ -497,15 +579,15 @@ export function checkboxRecipe({
       const rowOp = isDis ? 0.5 : 1;
       const boxBg = isOn ? primaryVar : isDis ? mutedBg : bgVar;
       const boxStroke = isOn ? primaryVar : isDis ? mutedBorder : borderVar;
-      const strokeW = isOn ? 0 : 1;
+      const strokeW = isOn ? 0 : (typeof strokeWeight === 'number' ? strokeWeight : 1);
       const labelCol = isDis ? labelMuted : labelColor;
       
       let checkmark = '';
       if (isOn) {
-        checkmark = `<Frame flex="row" w={18} h={18} justify="center" items="center">
-    <Frame flex="row" w={18} h={18} justify="center" items="center">
+        checkmark = `<Frame flex="row" ${wJsx} ${hJsx} justify="center" items="center">
+    <Frame flex="row" ${wJsx} ${hJsx} justify="center" items="center">
       <Frame name="Checkmark" flex="row" justify="center" items="center">
-        <Text size={11} weight="bold" color="${checkFg}">✓</Text>
+        <Text ${checkSizeJsx} weight="bold" color="${checkFg}">✓</Text>
       </Frame>
     </Frame>
   </Frame>`;
@@ -513,11 +595,11 @@ export function checkboxRecipe({
 
       variants.push({
         properties: { Checked: checked, Disabled: disabled },
-        jsx: `<Frame name="Checkbox" flex="row" items="center" gap={10} opacity={${rowOp}}>
-  <Frame flex="row" w={18} h={18} rounded={4} bg="${boxBg}" stroke="${boxStroke}" strokeWidth={${strokeW}} justify="center" items="center">
+        jsx: `<Frame name="Checkbox" flex="row" items="center" ${gapJsx} opacity={${rowOp}}>
+  <Frame flex="row" ${wJsx} ${hJsx} ${radiusJsx} bg="${boxBg}" stroke="${boxStroke}" strokeWidth={${strokeW}} justify="center" items="center">
     ${checkmark}
   </Frame>
-  <Text name="Label" size={14} color="${labelCol}">Option label</Text>
+  <Text name="Label" ${labelSizeJsx} color="${labelCol}">Option label</Text>
 </Frame>`
       });
     }
@@ -532,13 +614,27 @@ export function checkboxRecipe({
  * Dot is centered via nested flex Frame matching container size (18px).
  */
 export function radioRecipe({
-  borderVar = '#CBD5E1',
-  bgVar = '#FFFFFF',
-  primaryVar = '#7C3AED',
-  labelColor = '#334155',
-  mutedBorder = '#E2E8F0',
-  labelMuted = '#94A3B8'
+  borderVar = 'var:radio/border',
+  bgVar = 'var:radio/bg',
+  primaryVar = 'var:radio/primary',
+  labelColor = 'var:radio/fg',
+  mutedBorder = 'var:radio/muted/border',
+  labelMuted = 'var:radio/muted/fg',
+  labelFontSize = 'var:radio/font-size/label',
+  radius = 'var:radio/radius',
+  size = 'var:radio/size',
+  dotSize = 'var:radio/dot/size',
+  gap = 'var:radio/gap',
+  strokeWeight = 'var:radio/stroke-weight'
 } = {}) {
+  const labelSizeJsx = formatSizeProp(labelFontSize);
+  const wJsx = formatNumProp('w', size);
+  const hJsx = formatNumProp('h', size);
+  const dwJsx = formatNumProp('w', dotSize);
+  const dhJsx = formatNumProp('h', dotSize);
+  const gapJsx = formatNumProp('gap', gap);
+  const swJsx = formatNumProp('strokeWidth', strokeWeight);
+  
   const variants = [];
   for (const selected of ['No', 'Yes']) {
     for (const disabled of ['No', 'Yes']) {
@@ -547,29 +643,144 @@ export function radioRecipe({
       const rowOp = isDis ? 0.5 : 1;
       const ringStroke = isOn ? primaryVar : (isDis ? mutedBorder : borderVar);
       const ringFill = bgVar;
-      const strokeW = 2;
+      const strokeW = typeof strokeWeight === 'number' ? strokeWeight : 2;
       const labelCol = isDis ? labelMuted : labelColor;
       
       let innerDot = '';
       if (isOn) {
-        innerDot = `<Frame flex="row" w={18} h={18} justify="center" items="center">
-    <Ellipse w={8} h={8} fill="${primaryVar}" />
+        innerDot = `<Frame flex="row" ${wJsx} ${hJsx} justify="center" items="center">
+    <Ellipse ${dwJsx} ${dhJsx} fill="${primaryVar}" />
   </Frame>`;
       }
 
       variants.push({
         properties: { Selected: selected, Disabled: disabled },
-        jsx: `<Frame name="Radio" flex="row" items="center" gap={10} opacity={${rowOp}}>
-  <Frame w={18} h={18} rounded={999}>
-    <Ellipse w={18} h={18} fill="${ringFill}" stroke="${ringStroke}" strokeWidth={${strokeW}} />
+        jsx: `<Frame name="Radio" flex="row" items="center" ${gapJsx} opacity={${rowOp}}>
+  <Frame ${wJsx} ${hJsx} rounded={999}>
+    <Ellipse ${wJsx} ${hJsx} fill="${ringFill}" stroke="${ringStroke}" ${swJsx} />
     ${innerDot}
   </Frame>
-  <Text name="Label" size={14} color="${labelCol}">Option label</Text>
+  <Text name="Label" ${labelSizeJsx} color="${labelCol}">Option label</Text>
 </Frame>`
       });
     }
   }
   return { name: 'Radio', variants };
+}
+
+/**
+ * Modal / Dialog — Size × Type variants.
+ * Backdrop + Dialog container with Header (title + close), Content, Footer.
+ */
+export function modalRecipe({
+  backdropOpacity = 'var:modal/backdrop/opacity',
+  backdropColor = 'var:modal/backdrop/color',
+  bg = 'var:modal/bg',
+  border = 'var:modal/border',
+  headerBg = 'var:modal/header/bg',
+  headerBorder = 'var:modal/header/border',
+  titleColor = 'var:modal/fg',
+  bodyColor = 'var:modal/body',
+  footerBorder = 'var:modal/footer/border',
+  primaryBg = 'var:modal/primary/bg',
+  primaryFg = 'var:modal/primary/fg',
+  secondaryFg = 'var:modal/secondary/fg',
+  closeColor = 'var:modal/close',
+  titleFontSize = 'var:modal/font-size/title',
+  bodyFontSize = 'var:modal/font-size/body',
+  buttonFontSize = 'var:modal/font-size/button',
+  closeFontSize = 'var:modal/font-size/close',
+  radius = 'var:modal/radius',
+  paddingX = 'var:modal/padding/x',
+  paddingY = 'var:modal/padding/y',
+  gap = 'var:modal/gap',
+  strokeWeight = 'var:modal/stroke-weight'
+} = {}) {
+  const titleSizeJsx = formatSizeProp(titleFontSize);
+  const bodySizeJsx = formatSizeProp(bodyFontSize);
+  const buttonSizeJsx = formatSizeProp(buttonFontSize);
+  const closeSizeJsx = formatSizeProp(closeFontSize);
+  const radiusJsx = formatNumProp('rounded', radius);
+  const pxJsx = formatNumProp('px', paddingX);
+  const pyJsx = formatNumProp('py', paddingY);
+  const gapJsx = formatNumProp('gap', gap);
+  const swJsx = formatNumProp('strokeWidth', strokeWeight);
+  const opacityJsx = formatNumProp('opacity', backdropOpacity);
+  
+  const sizes = [
+    { Size: 'Sm', w: 320, contentH: 100 },
+    { Size: 'Md', w: 480, contentH: 160 },
+    { Size: 'Lg', w: 640, contentH: 240 }
+  ];
+
+  const createVariant = (size, type, hasFooter, hasHeader) => {
+    const variantProps = { Size: size.Size };
+    if (type !== 'Default') {
+      variantProps.Type = type;
+    }
+
+    let headerBgOverride = headerBg;
+    let titleColorOverride = titleColor;
+    if (type === 'Alert') {
+      headerBgOverride = '#FEF2F2';
+      titleColorOverride = '#991B1B';
+    } else if (type === 'Warning') {
+      headerBgOverride = '#FFFBEB';
+      titleColorOverride = '#78350F';
+    } else if (type === 'Success') {
+      headerBgOverride = '#F0FDF4';
+      titleColorOverride = '#14532D';
+    }
+
+    const headerPart = hasHeader
+      ? `<Frame flex="row" w="fill" justify="between" items="center" ${pxJsx} ${pyJsx} bg="${headerBgOverride}">
+    <Text name="Title" w="fill" ${titleSizeJsx} weight="semibold" color="${titleColorOverride}">Dialog title</Text>
+    <Frame name="CloseBtn" flex="row" w={24} h={24} justify="center" items="center">
+      <Text name="CloseIcon" ${closeSizeJsx} weight="bold" color="${closeColor}">×</Text>
+    </Frame>
+  </Frame>
+  <Frame w="fill" h={1} fill="${headerBorder}" />`
+      : '';
+
+    const footerPart = hasFooter
+      ? `<Frame w="fill" h={1} fill="${footerBorder}" />
+  <Frame flex="row" w="fill" justify="end" items="center" ${pxJsx} ${pyJsx} ${gapJsx}>
+    <Frame name="SecondaryBtn" flex="row" px={16} py={8} rounded={6} justify="center" items="center">
+      <Text name="SecondaryLabel" ${buttonSizeJsx} weight="medium" color="${secondaryFg}">Cancel</Text>
+    </Frame>
+    <Frame name="PrimaryBtn" flex="row" px={16} py={8} rounded={6} bg="${primaryBg}" justify="center" items="center">
+      <Text name="PrimaryLabel" ${buttonSizeJsx} weight="medium" color="${primaryFg}">Confirm</Text>
+    </Frame>
+  </Frame>`
+      : '';
+
+    const dialogH = size.w;
+    
+    return {
+      properties: variantProps,
+      jsx: `<Frame name="Modal" flex="row" w={${size.w}}>
+  <Frame name="Backdrop" absolute w={${size.w}} h={${dialogH}} bg="${backdropColor}" ${opacityJsx} />
+  <Frame name="Dialog" flex="col" w={${size.w}} bg="${bg}" stroke="${border}" ${swJsx} ${radiusJsx}>
+    ${headerPart}
+    <Frame name="Content" flex="col" w="fill" ${pxJsx} ${pyJsx}>
+      <Text name="Body" w="fill" ${bodySizeJsx} color="${bodyColor}">Modal content goes here. This is the main body area for the dialog message or form elements. This text can be overridden on instances.</Text>
+    </Frame>
+    ${footerPart}
+  </Frame>
+</Frame>`
+    };
+  };
+
+  const variants = [];
+  
+  for (const s of sizes) {
+    variants.push(createVariant(s, 'Default', true, true));
+  }
+
+  return {
+    name: 'Modal',
+    variants
+  };
 }
 
 const BUILD_KIND_ALIASES = new Map([
@@ -590,7 +801,10 @@ const BUILD_KIND_ALIASES = new Map([
   ['collapsible', 'accordion'],
   ['accordion item', 'accordion'],
   ['accordion-item', 'accordion'],
-  ['accordionitem', 'accordion']
+  ['accordionitem', 'accordion'],
+  ['dialog', 'modal'],
+  ['dialog box', 'modal'],
+  ['dialog-box', 'modal']
 ]);
 
 /** Normalize figma_build / CLI kind tokens before resolving recipes. */
@@ -642,15 +856,21 @@ export function getRecipeRebuildSpec(recipe, args = {}) {
       toneBg: args.notificationBgVar,
       toneBorder: args.notificationBorderVar,
       toneTitle: args.notificationTitleVar,
-      toneBody: args.notificationBodyVar
+      toneBody: args.notificationBodyVar,
+      titleFontSize: args.notificationTitleFontSize,
+      bodyFontSize: args.notificationBodyFontSize
     });
   }
   if (key === 'accordion') {
     return accordionRecipe({
+      bg: args.accordionBgVar,
       stroke: args.accordionStrokeVar ?? args.strokeVar,
       titleColor: args.accordionTitleVar ?? args.textVar,
       bodyColor: args.accordionBodyVar,
-      hintColor: args.accordionHintVar
+      hintColor: args.accordionHintVar,
+      titleFontSize: args.accordionTitleFontSize,
+      bodyFontSize: args.accordionBodyFontSize,
+      hintFontSize: args.accordionHintFontSize
     });
   }
   if (key === 'switch') {
@@ -658,7 +878,8 @@ export function getRecipeRebuildSpec(recipe, args = {}) {
       trackOff: args.switchTrackOffVar,
       trackOn: args.switchTrackOnVar ?? args.buttonBgVar,
       knobFill: args.switchKnobFillVar ?? args.buttonFgVar,
-      labelColor: args.switchLabelVar ?? args.textVar
+      labelColor: args.switchLabelVar ?? args.textVar,
+      labelFontSize: args.switchLabelFontSize
     });
   }
   if (key === 'checkbox' || key === 'checkboxes') {
@@ -670,7 +891,8 @@ export function getRecipeRebuildSpec(recipe, args = {}) {
       mutedBorder: args.checkboxMutedBorderVar,
       mutedBg: args.checkboxMutedBgVar ?? args.buttonMutedBgVar,
       labelColor: args.checkboxLabelVar ?? args.textVar,
-      labelMuted: args.checkboxLabelMutedVar ?? args.buttonMutedFgVar
+      labelMuted: args.checkboxLabelMutedVar ?? args.buttonMutedFgVar,
+      labelFontSize: args.checkboxLabelFontSize
     });
   }
   if (key === 'radio') {
@@ -680,7 +902,23 @@ export function getRecipeRebuildSpec(recipe, args = {}) {
       primaryVar: args.radioPrimaryVar ?? args.buttonBgVar,
       mutedBorder: args.radioMutedBorderVar,
       labelColor: args.radioLabelVar ?? args.textVar,
-      labelMuted: args.radioLabelMutedVar ?? args.buttonMutedFgVar
+      labelMuted: args.radioLabelMutedVar ?? args.buttonMutedFgVar,
+      labelFontSize: args.radioLabelFontSize
+    });
+  }
+  if (key === 'modal') {
+    return modalRecipe({
+      backdropOpacity: args.modalBackdropOpacity,
+      backdropColor: args.modalBackdropColor,
+      bg: args.modalBgVar ?? args.bgVar,
+      border: args.modalBorderVar ?? args.strokeVar,
+      primaryBg: args.modalPrimaryBgVar ?? args.buttonBgVar,
+      primaryFg: args.modalPrimaryFgVar ?? args.buttonFgVar,
+      titleColor: args.modalTitleVar ?? args.textVar,
+      titleFontSize: args.modalTitleFontSize,
+      bodyFontSize: args.modalBodyFontSize,
+      buttonFontSize: args.modalButtonFontSize,
+      closeFontSize: args.modalCloseFontSize
     });
   }
   return null;
