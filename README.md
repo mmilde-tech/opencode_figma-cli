@@ -198,6 +198,21 @@ it. Make sure Figma Desktop is installed:
 Your global npm bin isn't on `PATH`. Find it with `npm config get prefix` and
 add `<prefix>/bin` (Unix) or `<prefix>` (Windows) to `PATH`.
 
+## OpenCode / CDP vs “Figma MCP”
+
+**MCP** (Model Context Protocol) is a standard way for an AI app to call **external tools** exposed by an **MCP server**. A **“Figma MCP”** is whatever that server implements—often tools backed by the **Figma REST API** (OAuth / tokens, cloud, rate limits) and a fixed set of operations.
+
+**opencode-figma** is different: it is an **OpenCode plugin** (and optional **CLI**) that talks to **Figma Desktop on your machine** over **Chrome DevTools Protocol (CDP)** and runs in the **Figma plugin runtime**. You work on the **file open in Desktop** with **no Figma API key** for that path. Capabilities match what a real plugin can do in the editor, not only what one MCP server chose to wrap.
+
+| Topic | **opencode-figma** | **Typical Figma-related MCP** |
+|-------|------------------|-------------------------------|
+| Link to the model | Native OpenCode `figma_*` tools (+ CLI) | MCP tools / resources |
+| How it reaches Figma | Local CDP → Figma Desktop | Often HTTPS → Figma API (varies by server) |
+| Auth | **No API key for the CDP desktop flow** | Often OAuth / personal access token |
+| What you drive | The open desktop file | Whatever that server’s API + scopes allow |
+
+*“Figma MCP” is not one product—compare a specific server’s docs if you need exact limits.*
+
 ## Copyright
 
 © 2026 M.Milde · [m.milde@gmail.com](mailto:m.milde@gmail.com)
