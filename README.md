@@ -211,8 +211,6 @@ add `<prefix>/bin` (Unix) or `<prefix>` (Windows) to `PATH`.
 | Auth | **No API key for the CDP desktop flow** | Often OAuth / personal access token |
 | What you drive | The open desktop file | Whatever that server’s API + scopes allow |
 
-*“Figma MCP” is not one product—compare a specific server’s docs if you need exact limits.*
-
 ## Copyright
 
 © 2026 M.Milde · [m.milde@gmail.com](mailto:m.milde@gmail.com)
